@@ -1,20 +1,14 @@
-"""
-CartoSky
-======
+try:
+    from importlib.metadata import version, PackageNotFoundError
+except ImportError:
+    from importlib_metadata import version, PackageNotFoundError
 
-Provides utilities for plotting sky maps.
-"""
-__author__ = 'Alex Drlica-Wagner'
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+try:
+    __version__ = version("cartosky")
+except PackageNotFoundError:
+    # package is not installed
+    pass
 
-from cartosky.core import *
-from cartosky.survey import SurveySkymap,SurveyMcBryde,SurveyOrtho
-from cartosky.zoom import DESSkymap, BlissSkymap
-
-
-import warnings
-from matplotlib.cbook import MatplotlibDeprecationWarning
-warnings.filterwarnings("ignore",category=MatplotlibDeprecationWarning)
-
+from .skymap import *
+from .projections import *
+from .formatters import *
