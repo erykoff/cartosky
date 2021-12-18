@@ -12,3 +12,4 @@ except PackageNotFoundError:
 from .skymap import *
 from .projections import *
 from .formatters import *
+from .survey import *

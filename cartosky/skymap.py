@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
+import warnings
 # import healsparse as hsp
 
-from cartopy.crs import PlateCarree
+from cartopy.crs import PlateCarree, Geodetic
+from shapely.geometry.polygon import Polygon, LineString
 
 import mpl_toolkits.axisartist as axisartist
 import mpl_toolkits.axisartist.angle_helper as angle_helper
@@ -297,6 +299,117 @@ class Skymap():
     def hexbin(self, *args, transform=PlateCarree(), **kwargs):
         """Plot with ax.hexbin(*args, **kwargs)."""
         return self._ax.hexbin(*args, transform=transform, **kwargs)
+
+    def draw_line_lonlat(self, lon, lat, crs=Geodetic(), transform=PlateCarree(),
+                         edgecolor='k', facecolor='none',
+                         **kwargs):
+        """Draw a line assuming a Geodetic transform.
+
+        This uses the `shapely.geometry.LineString` class to describe
+        a one-dimensional figure comprising one or more line segments.
+
+        Parameters
+        ----------
+        lon : `np.ndarray`
+            Array of longitude points in the line segments.
+        lat : `np.ndarray`
+            Array of latitude points in the line segments.
+        crs : ``
+            Something here.
+        transform : `cartopy.crs.Projection`, optional
+            Projection to use for transformation.
+        edgecolor : `str`, optional
+            Color of line segments.
+        facecolor : `str`, optional
+            Face color of line-segment polygons.
+        **kwargs : `dict`
+            Additional keywords passed to plot.
+        """
+        line = LineString(list(zip(lon, lat))[::-1])
+        return self._ax.add_geometries([line],
+                                       transform=transform,
+                                       crs=crs,
+                                       edgecolor=edgecolor,
+                                       facecolor=facecolor,
+                                       **kwargs)
+
+    def draw_polygon_lonlat(self, lon, lat, crs=Geodetic(), transform=PlateCarree(),
+                            edgecolor='red', facecolor='none',
+                            **kwargs):
+        """Draw a shapely Polygon from a list of lon, lat coordinates.
+
+        Parameters
+        ----------
+        lon : `np.ndarray`
+            Array of longitude points in polygon.
+        lat : `np.ndarray`
+            Array of latitude points in polygon.
+        crs : ``
+            Something here.
+        transform : `cartopy.crs.Projection`, optional
+            Projection to use for transformation.
+        edgecolor : `str`
+            Color of polygon boundary.
+        facecolor : `str`
+            Color of polygon face.
+        **kwargs : `dict`
+            Additional keywords passed to plot.
+        """
+        lon = np.atleast_1d(lon).ravel()
+        lat = np.atleast_1d(lat).ravel()
+        coords = np.vstack([lon, lat]).T
+        poly = Polygon(coords)
+        self._ax.add_geometries([poly],
+                                crs=crs,
+                                edgecolor=edgecolor,
+                                facecolor=facecolor,
+                                **kwargs)
+        if 'label' in kwargs:
+            # Make a hidden plot to add this to the legend dict.
+            self.plot(np.nan, np.nan, color=edgecolor, label=kwargs['label'])
+        return poly
+
+    def draw_polygon_file(self, filename, reverse=True, transform=PlateCarree(),
+                          edgecolor='red', facecolor='none', **kwargs):
+        """Draw a text file containing lon, lat coordinates of polygon(s).
+
+        Parameters
+        ----------
+        filename : `str`
+            Name of file containing the polygon(s) [lon, lat, poly]
+        reverse : `bool`
+            Reverse drawing order of points in each polygon.
+        transform : `cartopy.crs.Projection`, optional
+            Projection to use for transformation.
+        edgecolor : `str`
+            Color of polygon boundary.
+        facecolor : `str`
+            Color of polygon face.
+        **kwargs : `dict`
+            Additional keywords passed to plot.
+        """
+        try:
+            data = np.genfromtxt(filename, names=['lon', 'lat', 'poly'])
+        except ValueError:
+            from numpy.lib.recfunctions import append_fields
+            data = np.genfromtxt(filename, names=['lon', 'lat'])
+            data = append_fields(data, 'poly', np.zeros(len(data)))
+
+        ret = []
+        for p in np.unique(data['poly']):
+            poly = data[data['poly'] == p]
+            lon = poly['lon'][::-1] if reverse else poly['lon']
+            lat = poly['lat'][::-1] if reverse else poly['lat']
+            feat = self.draw_polygon_lonlat(lon,
+                                            lat,
+                                            transform=transform,
+                                            edgecolor=edgecolor,
+                                            facecolor=facecolor,
+                                            **kwargs)
+            ret += [feat]
+            kwargs.pop('label', None)
+
+        return ret
 
     def draw_hpxmap(self, hpxmap, nest=False, zoom=True, xsize=1000, vmin=None, vmax=None,
                     rasterized=True, lon_range=None, lat_range=None, **kwargs):
