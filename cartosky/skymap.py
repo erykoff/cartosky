@@ -12,9 +12,10 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from .projections import get_projection
 from .formatters import WrappedFormatterDMS
-from .hpx_utils import healpix_pixels_range, hspmap_to_xy, hpxmap_to_xy, healpix_to_xy
+from .hpx_utils import healpix_pixels_range, hspmap_to_xy, hpxmap_to_xy, healpix_to_xy, healpix_bin
 
-__all__ = ['Skymap', 'McBrydeSkymap', 'OrthoSkymap', 'MollweideSkymap', 'HammerSkymap', 'AitoffSkymap']
+__all__ = ['Skymap', 'McBrydeSkymap', 'OrthoSkymap', 'MollweideSkymap',
+           'HammerSkymap', 'AitoffSkymap', 'EqualEarthSkymap']
 
 
 class Skymap():
@@ -313,7 +314,12 @@ class Skymap():
 
     def hexbin(self, *args, transform=PlateCarree(), **kwargs):
         """Plot with ax.hexbin(*args, **kwargs)."""
+        # FIXME: do we want to set the extent automatically here?
         return self._ax.hexbin(*args, transform=transform, **kwargs)
+
+    def legend(self, *args, **kwargs):
+        """Add legend to the axis with ax.legend(*args, **kwargs)."""
+        return self._ax.legend(*args, **kwargs)
 
     def draw_line_lonlat(self, lon, lat,
                          edgecolor='k', facecolor='none',
@@ -337,6 +343,8 @@ class Skymap():
             Additional keywords passed to plot.
         """
         line = LineString(list(zip(lon, lat))[::-1])
+        # Passing transform is always an error here, so filter it out.
+        kwargs.pop('transform', None)
         # Note that setting crs=None yields a great circle
         return self._ax.add_geometries([line],
                                        crs=None,
@@ -366,6 +374,8 @@ class Skymap():
         lat = np.atleast_1d(lat).ravel()
         coords = np.vstack([lon, lat]).T
         poly = Polygon(coords)
+        # Passing transform is always an error here, so filter it out.
+        kwargs.pop('transform', None)
         # Note that crs=None yields line segments that are great circles.
         self._ax.add_geometries([poly],
                                 crs=None,
@@ -377,7 +387,7 @@ class Skymap():
             self.plot(np.nan, np.nan, color=edgecolor, label=kwargs['label'])
         return poly
 
-    def draw_polygon_file(self, filename, reverse=True, transform=PlateCarree(),
+    def draw_polygon_file(self, filename, reverse=True,
                           edgecolor='red', facecolor='none', **kwargs):
         """Draw a text file containing lon, lat coordinates of polygon(s).
 
@@ -387,8 +397,6 @@ class Skymap():
             Name of file containing the polygon(s) [lon, lat, poly]
         reverse : `bool`
             Reverse drawing order of points in each polygon.
-        transform : `cartopy.crs.Projection`, optional
-            Projection to use for transformation.
         edgecolor : `str`
             Color of polygon boundary.
         facecolor : `str`
@@ -410,7 +418,6 @@ class Skymap():
             lat = poly['lat'][::-1] if reverse else poly['lat']
             feat = self.draw_polygon_lonlat(lon,
                                             lat,
-                                            transform=transform,
                                             edgecolor=edgecolor,
                                             facecolor=facecolor,
                                             **kwargs)
@@ -425,6 +432,38 @@ class Skymap():
 
         Parameters
         ----------
+        hpxmap : `np.ndarray`
+            Healpix map to plot, with length 12*nside*nside and UNSEEN for
+            illegal values.
+        nest : `bool`, optional
+            Map in nest ordering?
+        zoom : `bool`, optional
+            Optimally zoom in projection to computed map.
+        xsize : `int`, optional
+            Number of rasterized pixels in the x direction.
+        vmin : `float`, optional
+            Minimum value for color scale.  Defaults to 2.5th percentile.
+        vmax : `float`, optional
+            Maximum value for color scale.  Defaults to 97.5th percentile.
+        rasterized : `bool`, optional
+            Plot with rasterized graphics.
+        lon_range : `tuple` [`float`, `float`], optional
+            Longitude range to plot [``lon_min``, ``lon_max``].
+        lat_range : `tuple` [`float`, `float`], optional
+            Latitude range to plot [``lat_min``, ``lat_max``].
+        **kwargs : `dict`
+            Additional args to pass to pcolormesh.
+
+        Returns
+        -------
+        im : `cartopy.mpl.geocollection.GeoQuadMesh`
+            Image that was displayed
+        lon_raster : `np.ndarray`
+            2D array of rasterized longitude values.
+        lat_raster : `np.ndarray`
+            2D array of rasterized latitude values.
+        values_raster : `np.ma.MaskedArray`
+            Masked array of rasterized values.
         """
         nside = hp.npix2nside(hpxmap.size)
         pixels, = np.where(hpxmap != hp.UNSEEN)
@@ -456,13 +495,7 @@ class Skymap():
         if zoom:
             extent = self.compute_extent(lon_raster[:-1, :-1][~values_raster.mask],
                                          lat_raster[:-1, :-1][~values_raster.mask])
-            # Okay, it's clear we need a new axis artist ...
-            # self.set_axes_limits(extent, invert=False)
-            # self.create_axes()
-            # self.set_axes_limits(extent, invert=self.do_celestial)
             self.set_extent(extent)
-
-            # self.set_axes_limits(extent)
 
         im = self.pcolormesh(lon_raster, lat_raster, values_raster, **kwargs)
         self._ax._sci(im)
@@ -475,6 +508,41 @@ class Skymap():
 
         Parameters
         ----------
+        nside : `int`
+            Healpix nside of pixels to plot.
+        pixels : `np.ndarray`
+            Array of pixels to plot.
+        values : `np.ndarray`
+            Array of values associated with pixels.
+        nest : `bool`, optional
+            Map in nest ordering?
+        zoom : `bool`, optional
+            Optimally zoom in projection to computed map.
+        xsize : `int`, optional
+            Number of rasterized pixels in the x direction.
+        vmin : `float`, optional
+            Minimum value for color scale.  Defaults to 2.5th percentile.
+        vmax : `float`, optional
+            Maximum value for color scale.  Defaults to 97.5th percentile.
+        rasterized : `bool`, optional
+            Plot with rasterized graphics.
+        lon_range : `tuple` [`float`, `float`], optional
+            Longitude range to plot [``lon_min``, ``lon_max``].
+        lat_range : `tuple` [`float`, `float`], optional
+            Latitude range to plot [``lat_min``, ``lat_max``].
+        **kwargs : `dict`
+            Additional args to pass to pcolormesh.
+
+        Returns
+        -------
+        im : `cartopy.mpl.geocollection.GeoQuadMesh`
+            Image that was displayed
+        lon_raster : `np.ndarray`
+            2D array of rasterized longitude values.
+        lat_raster : `np.ndarray`
+            2D array of rasterized latitude values.
+        values_raster : `np.ma.MaskedArray`
+            Masked array of rasterized values.
         """
         if lon_range is None or lat_range is None:
             _lon_range, _lat_range = healpix_pixels_range(nside,
@@ -519,6 +587,35 @@ class Skymap():
 
         Parameters
         ----------
+        hspmap : `healsparse.HealSparseMap`
+            Healsparse map to plot.
+        zoom : `bool`, optional
+            Optimally zoom in projection to computed map.
+        xsize : `int`, optional
+            Number of rasterized pixels in the x direction.
+        vmin : `float`, optional
+            Minimum value for color scale.  Defaults to 2.5th percentile.
+        vmax : `float`, optional
+            Maximum value for color scale.  Defaults to 97.5th percentile.
+        rasterized : `bool`, optional
+            Plot with rasterized graphics.
+        lon_range : `tuple` [`float`, `float`], optional
+            Longitude range to plot [``lon_min``, ``lon_max``].
+        lat_range : `tuple` [`float`, `float`], optional
+            Latitude range to plot [``lat_min``, ``lat_max``].
+        **kwargs : `dict`
+            Additional args to pass to pcolormesh.
+
+        Returns
+        -------
+        im : `cartopy.mpl.geocollection.GeoQuadMesh`
+            Image that was displayed
+        lon_raster : `np.ndarray`
+            2D array of rasterized longitude values.
+        lat_raster : `np.ndarray`
+            2D array of rasterized latitude values.
+        values_raster : `np.ma.MaskedArray`
+            Masked array of rasterized values.
         """
         valid_pixels = hspmap.valid_pixels
 
@@ -553,7 +650,59 @@ class Skymap():
 
         im = self.pcolormesh(lon_raster, lat_raster, values_raster, **kwargs)
         self._ax._sci(im)
+
         return im, lon_raster, lat_raster, values_raster
+
+    def draw_hpxbin(self, lon, lat, C=None, nside=256, nest=False, zoom=True, xsize=1000,
+                    vmin=None, vmax=None,
+                    rasterized=True, lon_range=None, lat_range=None, **kwargs):
+        """Create a healpix histogram of counts in lon, lat.
+
+        Related to ``hexbin`` from matplotlib.
+
+        If ``C`` array is specified then the mean is taken from the C values.
+
+        Parameters
+        ----------
+        lon : `np.ndarray`
+            Array of longitude values.
+        lat : `np.ndarray`
+            Array of latitude values.
+        C : `np.ndarray`, optional
+            Array of values to average in each pixel.
+        nside : `int`, optional
+            Healpix nside resolution.
+        nest : `bool`, optional
+            Compute map in nest ordering?
+        zoom : `bool`, optional
+            Optimally zoom in projection to computed map.
+        xsize : `int`, optional
+            Number of rasterized pixels in the x direction.
+        vmin : `float`, optional
+            Minimum value for color scale.  Defaults to 2.5th percentile.
+        vmax : `float`, optional
+            Maximum value for color scale.  Defaults to 97.5th percentile.
+        rasterized : `bool`, optional
+            Plot with rasterized graphics.
+        lon_range : `tuple` [`float`, `float`], optional
+            Longitude range to plot [``lon_min``, ``lon_max``].
+        lat_range : `tuple` [`float`, `float`], optional
+            Latitude range to plot [``lat_min``, ``lat_max``].
+        **kwargs : `dict`
+            Additional args to pass to pcolormesh.
+
+        Returns
+        -------
+        hpxmap : `np.ndarray`
+            Computed healpix map.
+        im : `cartopy.mpl.geocollection.GeoQuadMesh`
+            Image that was displayed.
+        """
+        hpxmap = healpix_bin(lon, lat, C=C, nside=nside, nest=nest)
+
+        return self.draw_hpxmap(hpxmap, nest=nest, zoom=zoom, xsize=xsize, vmin=vmin,
+                                vmax=vmax, rasterized=rasterized, lon_range=lon_range,
+                                lat_range=lat_range, **kwargs)
 
     def draw_inset_colorbar(self, ax=None, format=None, label=None, ticks=None, fontsize=11,
                             width="25%", height="5%", loc=7, bbox_to_anchor=(0., -0.04, 1, 1),
@@ -619,6 +768,9 @@ class Skymap():
         return cbar, cax
 
 
+# The following skymaps include the equal-area projections that are tested
+# and known to work.
+
 class McBrydeSkymap(Skymap):
     def __init__(self, **kwargs):
         super().__init__(projection_name='mbtfpq', **kwargs)
@@ -642,3 +794,8 @@ class HammerSkymap(Skymap):
 class AitoffSkymap(Skymap):
     def __init__(self, **kwargs):
         super().__init__(projection_name='aitoff', **kwargs)
+
+
+class EqualEarthSkymap(Skymap):
+    def __init__(self, **kwargs):
+        super().__init__(projection_name='eqearth', **kwargs)

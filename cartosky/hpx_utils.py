@@ -1,7 +1,8 @@
 import numpy as np
 import healpy as hp
 
-__all__ = ['healpix_pixels_range', 'hspmap_to_xy', 'hpxmap_to_xy', 'healpix_to_xy']
+__all__ = ['healpix_pixels_range', 'hspmap_to_xy', 'hpxmap_to_xy', 'healpix_to_xy',
+           'healpix_bin']
 
 
 def healpix_pixels_range(nside, pixels, wrap, nest=False):
@@ -182,3 +183,42 @@ def healpix_to_xy(nside, pixels, values, lon_range, lat_range,
     values_raster[sub2] = values[sub1]
 
     return lon_raster, lat_raster, np.ma.array(values_raster, mask=mask)
+
+
+def healpix_bin(lon, lat, C=None, nside=256, nest=False):
+    """Create a healpix histogram of counts in lon/lat space.
+
+    Parameters
+    ----------
+    lon : `np.ndarray`
+        Longitude array (degrees).
+    lat : `np.ndarray`
+        Latitude array (degrees).
+    C : `np.ndarray`, optional
+        Array of values to take average, paired with lon/lat.
+    nside : `int`, optional
+        Healpix nside resolution.
+    nest : `bool`, optional
+        Map in nest format?
+
+    Returns
+    -------
+    hpxmap : `np.ndarray`
+        Healsparse map of counts.
+    """
+    pix = hp.ang2pix(nside, lon, lat, lonlat=True, nest=nest)
+
+    count = np.zeros(hp.nside2npix(nside), dtype=np.int32)
+    np.add.at(count, pix, 1)
+    good = count > 0
+
+    if C is not None:
+        hpxmap = np.zeros(hp.nside2npix(nside))
+        np.add.at(hpxmap, pix, C)
+        hpxmap[good] /= count[good]
+    else:
+        hpxmap = count.astype(np.float64)
+
+    hpxmap[~good] = hp.UNSEEN
+
+    return hpxmap
