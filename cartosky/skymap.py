@@ -1,10 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
-import warnings
-# import healsparse as hsp
 
-from cartopy.crs import PlateCarree, Geodetic
+from cartopy.crs import PlateCarree
 from shapely.geometry.polygon import Polygon, LineString
 
 import mpl_toolkits.axisartist as axisartist
@@ -24,6 +22,22 @@ class Skymap():
 
     Parameters
     ----------
+    ax : `matplotlib.axes.Axes`, optional
+        Axis object to replace with a skymap axes
+    projection_name : `str`, optional
+        Valid proj4/cartosky projection name.
+    lon_0 : `float`, optional
+        Central longitude of projection.
+    gridlines : `bool`, optional
+        Draw gridlines?
+    celestial : `bool`, optional
+        Do celestial plotting (e.g. invert longitude axis).
+    extent : iterable, optional
+        Default exent of the map, [lon_min, lon_max, lat_min, lat_max].
+        Note that lon_min, lon_max can be specified in any order, the
+        orientation of the map is set by ``celestial``.
+    **kwargs : `dict`, optional
+        Additional arguments to send to cartosky/proj4 projection initialization.
     """
     def __init__(self, ax=None, projection_name='cyl', lon_0=0, gridlines=True, celestial=True,
                  extent=None, **kwargs):
@@ -59,6 +73,7 @@ class Skymap():
         """Apply projection.
 
         Convert from lon/lat to x/y (forward) or x/y to lon/lat (inverse=True).
+        All lon/lat units are in degrees.
 
         Parameters
         ----------
@@ -300,7 +315,7 @@ class Skymap():
         """Plot with ax.hexbin(*args, **kwargs)."""
         return self._ax.hexbin(*args, transform=transform, **kwargs)
 
-    def draw_line_lonlat(self, lon, lat, crs=Geodetic(), transform=PlateCarree(),
+    def draw_line_lonlat(self, lon, lat,
                          edgecolor='k', facecolor='none',
                          **kwargs):
         """Draw a line assuming a Geodetic transform.
@@ -314,10 +329,6 @@ class Skymap():
             Array of longitude points in the line segments.
         lat : `np.ndarray`
             Array of latitude points in the line segments.
-        crs : ``
-            Something here.
-        transform : `cartopy.crs.Projection`, optional
-            Projection to use for transformation.
         edgecolor : `str`, optional
             Color of line segments.
         facecolor : `str`, optional
@@ -326,14 +337,14 @@ class Skymap():
             Additional keywords passed to plot.
         """
         line = LineString(list(zip(lon, lat))[::-1])
+        # Note that setting crs=None yields a great circle
         return self._ax.add_geometries([line],
-                                       transform=transform,
-                                       crs=crs,
+                                       crs=None,
                                        edgecolor=edgecolor,
                                        facecolor=facecolor,
                                        **kwargs)
 
-    def draw_polygon_lonlat(self, lon, lat, crs=Geodetic(), transform=PlateCarree(),
+    def draw_polygon_lonlat(self, lon, lat,
                             edgecolor='red', facecolor='none',
                             **kwargs):
         """Draw a shapely Polygon from a list of lon, lat coordinates.
@@ -344,10 +355,6 @@ class Skymap():
             Array of longitude points in polygon.
         lat : `np.ndarray`
             Array of latitude points in polygon.
-        crs : ``
-            Something here.
-        transform : `cartopy.crs.Projection`, optional
-            Projection to use for transformation.
         edgecolor : `str`
             Color of polygon boundary.
         facecolor : `str`
@@ -359,8 +366,9 @@ class Skymap():
         lat = np.atleast_1d(lat).ravel()
         coords = np.vstack([lon, lat]).T
         poly = Polygon(coords)
+        # Note that crs=None yields line segments that are great circles.
         self._ax.add_geometries([poly],
-                                crs=crs,
+                                crs=None,
                                 edgecolor=edgecolor,
                                 facecolor=facecolor,
                                 **kwargs)
