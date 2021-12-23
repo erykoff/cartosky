@@ -11,11 +11,11 @@ from mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinea
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from .projections import get_projection
-from .formatters import WrappedFormatterDMS
 from .hpx_utils import healpix_pixels_range, hspmap_to_xy, hpxmap_to_xy, healpix_to_xy, healpix_bin
+from .mpl_utils import ExtremeFinderWrapped, WrappedFormatterDMS
 
 __all__ = ['Skymap', 'McBrydeSkymap', 'OrthoSkymap', 'MollweideSkymap',
-           'HammerSkymap', 'AitoffSkymap', 'EqualEarthSkymap']
+           'HammerSkymap', 'EqualEarthSkymap']
 
 
 class Skymap():
@@ -70,34 +70,52 @@ class Skymap():
 
         self.set_extent(extent)
 
-    def proj(self, lon_or_x, lat_or_y, inverse=False):
-        """Apply projection.
+    def proj(self, lon, lat):
+        """Apply forward projection to a set of lon/lat positions.
 
-        Convert from lon/lat to x/y (forward) or x/y to lon/lat (inverse=True).
-        All lon/lat units are in degrees.
+        Convert from lon/lat to x/y.
 
         Parameters
         ----------
-        lon_or_x : `float` or `list` or `np.ndarray`
-            Longitude(s) (RA) (forward) or x values (inverse)
+        lon : `float` or `list` or `np.ndarray`
+            Array of longitude(s) (degrees).
         lat : `float` or `list` or `np.ndarray`
-            Latitude(s) (Dec) (forward) or y values (inverse)
-        inverse : `bool`, optional
-            Apply inverse transformation from x/y to ra/dec.
+            Array of latitudes(s) (degrees).
 
         Returns
         -------
-        x_or_lon : `np.ndarray`
-            Array of x values (forward) or longitudes (inverse)
-        y_or_lat : `np.ndarray`
-            Array of y values (forward) or latitudes (inverse)
+        x : `np.ndarray`
+            Array of x values.
+        y : `np.ndarray`
+            Array of y values.
         """
-        lon_or_x = np.atleast_1d(lon_or_x)
-        lat_or_y = np.atleast_1d(lat_or_y)
-        if inverse:
-            proj_xyz = PlateCarree().transform_points(self.projection, lon_or_x, lat_or_y)
-        else:
-            proj_xyz = self.projection.transform_points(PlateCarree(), lon_or_x, lat_or_y)
+        lon = np.atleast_1d(lon)
+        lat = np.atleast_1d(lat)
+        proj_xyz = self.projection.transform_points(PlateCarree(), lon, lat)
+        return proj_xyz[..., 0], proj_xyz[..., 1]
+
+    def proj_inverse(self, x, y):
+        """Apply inverse projection to a set of points.
+
+        Convert from x/y to lon/lat.
+
+        Parameters
+        ----------
+        x : `float` or `list` or `np.ndarray`
+            Projected x values.
+        y : `float` or `list` or `np.ndarray`
+            Projected y values.
+
+        Returns
+        -------
+        lon : `np.ndarray`
+            Array of longitudes (degrees).
+        lat : `np.ndarray`
+            Array of latitudes (degrees).
+        """
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+        proj_xyz = PlateCarree().transform_points(self.projection, x, y)
         return proj_xyz[..., 0], proj_xyz[..., 1]
 
     def set_extent(self, extent):
@@ -116,7 +134,7 @@ class Skymap():
             self._aa = None
 
         self._set_axes_limits(extent, invert=False)
-        self._create_axes()
+        self._create_axes(extent)
         self._set_axes_limits(extent, invert=self.do_celestial)
 
         self._ax.set_frame_on(False)
@@ -140,13 +158,32 @@ class Skymap():
                 np.linspace(extent[0], extent[1], 20), np.linspace(extent[2], extent[3], 20)
             )
             x, y = self.proj(lon.ravel(), lat.ravel())
-            extent_xform = [np.max(x),
-                            np.min(x),
-                            np.min(y),
-                            np.max(y)]
+            # Need to offset this by some small amount to ensure we don't get
+            # out-of-bounds transformations.
+            extent_xform = [0.9999*np.max(x),
+                            0.9999*np.min(x),
+                            0.9999*np.min(y),
+                            0.9999*np.max(y)]
             self._ax.set_extent(extent_xform, crs=self.projection)
         else:
             self._ax.set_extent(extent, crs=PlateCarree())
+
+        extreme_finder = ExtremeFinderWrapped(20, 20, self._wrap)
+        extent_xform = self._ax.get_extent()
+        lon_min, lon_max, lat_min, lat_max = extreme_finder(self.proj_inverse,
+                                                            extent_xform[0],
+                                                            extent_xform[2],
+                                                            extent_xform[1],
+                                                            extent_xform[3])
+        if np.isclose(np.abs(lon_max - lon_min), 360.0):
+            # Draw the outer edges of the projection.  This needs to be forward-
+            # projected and drawn in that space to prevent out-of-bounds clipping.
+            x, y = self.proj(np.linspace(self._lon_0 - 180., self._lon_0 - 180.),
+                             np.linspace(-90., 90.))
+            self.plot(x, y, 'k-', transform=self.projection)
+            x, y = self.proj(np.linspace(self._lon_0 + 180., self._lon_0 + 180.),
+                             np.linspace(-90., 90.))
+            self.plot(x, y, 'k-', transform=self.projection)
 
         if self._aa is not None:
             self._aa.set_xlim(self._ax.get_xlim())
@@ -159,16 +196,15 @@ class Skymap():
 
         return self._ax.get_xlim(), self._ax.get_ylim()
 
-    def _create_axes(self):
+    def _create_axes(self, extent):
         """Create axes and axis artist.
+
+        Parameters
+        ----------
+        extent : `list`
+            Axis extent [lon_min, lon_max, lat_min, lat_max] (degrees).
         """
-        def tr(lon, lat):
-            return self.proj(lon, lat)
-
-        def inv_tr(x, y):
-            return self.proj(x, y, inverse=True)
-
-        extreme_finder = angle_helper.ExtremeFinderCycle(20, 20)
+        extreme_finder = ExtremeFinderWrapped(20, 20, self._wrap)
         grid_locator1 = angle_helper.LocatorD(10, include_last=False)
         grid_locator2 = angle_helper.LocatorD(6, include_last=False)
 
@@ -176,21 +212,25 @@ class Skymap():
         tick_formatter2 = angle_helper.FormatterDMS()
 
         grid_helper = GridHelperCurveLinear(
-            (tr, inv_tr),
+            # (tr, inv_tr),
+            (self.proj, self.proj_inverse),
             extreme_finder=extreme_finder,
             grid_locator1=grid_locator1,
             grid_locator2=grid_locator2,
             tick_formatter1=tick_formatter1,
             tick_formatter2=tick_formatter2,
         )
+        self._grid_helper = grid_helper
 
         fig = self._ax.figure
         rect = self._ax.get_position()
         self._aa = axisartist.Axes(fig, rect, grid_helper=grid_helper, frameon=False)
         fig.add_axes(self._aa)
 
+        self._grid_helper = grid_helper
+
         def format_coord(x, y):
-            return 'lon=%1.4f, lat=%1.4f' % (inv_tr(x, y))
+            return 'lon=%1.4f, lat=%1.4f' % (self.proj_inverse(x, y))
 
         self._aa.format_coord = format_coord
         self._aa.axis['left'].major_ticklabels.set_visible(True)
@@ -345,7 +385,7 @@ class Skymap():
         line = LineString(list(zip(lon, lat))[::-1])
         # Passing transform is always an error here, so filter it out.
         kwargs.pop('transform', None)
-        # Note that setting crs=None yields a great circle
+        # Note that setting crs=None yields a great circle, as desired.
         return self._ax.add_geometries([line],
                                        crs=None,
                                        edgecolor=edgecolor,
@@ -789,11 +829,6 @@ class MollweideSkymap(Skymap):
 class HammerSkymap(Skymap):
     def __init__(self, **kwargs):
         super().__init__(projection_name='hammer', **kwargs)
-
-
-class AitoffSkymap(Skymap):
-    def __init__(self, **kwargs):
-        super().__init__(projection_name='aitoff', **kwargs)
 
 
 class EqualEarthSkymap(Skymap):
