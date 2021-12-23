@@ -11,5 +11,5 @@ except PackageNotFoundError:
 
 from .skymap import *
 from .projections import *
-from .formatters import *
+from .mpl_utils import *
 from .survey import *
