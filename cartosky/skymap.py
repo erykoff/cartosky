@@ -7,12 +7,11 @@ from shapely.geometry.polygon import Polygon, LineString
 
 import mpl_toolkits.axisartist as axisartist
 import mpl_toolkits.axisartist.angle_helper as angle_helper
-from mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinear
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from .projections import get_projection
 from .hpx_utils import healpix_pixels_range, hspmap_to_xy, hpxmap_to_xy, healpix_to_xy, healpix_bin
-from .mpl_utils import ExtremeFinderWrapped, WrappedFormatterDMS
+from .mpl_utils import ExtremeFinderWrapped, WrappedFormatterDMS, GridHelperSkymap
 
 __all__ = ['Skymap', 'McBrydeSkymap', 'OrthoSkymap', 'MollweideSkymap',
            'HammerSkymap', 'EqualEarthSkymap']
@@ -211,13 +210,14 @@ class Skymap():
         tick_formatter1 = WrappedFormatterDMS(self._wrap)
         tick_formatter2 = angle_helper.FormatterDMS()
 
-        grid_helper = GridHelperCurveLinear(
+        grid_helper = GridHelperSkymap(
             (self.proj, self.proj_inverse),
             extreme_finder=extreme_finder,
             grid_locator1=grid_locator1,
             grid_locator2=grid_locator2,
             tick_formatter1=tick_formatter1,
             tick_formatter2=tick_formatter2,
+            extent_xy = self._ax.get_extent()
         )
 
         fig = self._ax.figure

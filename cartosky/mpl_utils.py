@@ -2,8 +2,9 @@ import numpy as np
 
 from mpl_toolkits.axisartist.grid_finder import ExtremeFinderSimple
 import mpl_toolkits.axisartist.angle_helper as angle_helper
+from mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinear
 
-__all__ = ['WrappedFormatterDMS', 'ExtremeFinderWrapped']
+__all__ = ['WrappedFormatterDMS', 'ExtremeFinderWrapped', 'GridHelperSkymap']
 
 
 class WrappedFormatterDMS(angle_helper.FormatterDMS):
@@ -74,3 +75,42 @@ class ExtremeFinderWrapped(ExtremeFinderSimple):
         lon_max = np.clip(lon_max, -self._wrap, self._wrap)
 
         return lon_min, lon_max, lat_min, lat_max
+
+
+class GridHelperSkymap(GridHelperCurveLinear):
+    """GridHelperCurveLinear with tick overlap protection.
+    """
+    def __init__(self, *args, extent_xy=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._extent_xy = extent_xy
+
+    def get_tick_iterator(self, nth_coord, axis_side, minor=False):
+
+        try:
+            _grid_info = self._grid_info
+        except AttributeError:
+            _grid_info = self.grid_info
+
+        angle_tangent = dict(left=90, right=90, bottom=0, top=0)[axis_side]
+        lon_or_lat = ["lon", "lat"][nth_coord]
+        if lon_or_lat == "lon":
+            delta_x = abs(self._extent_xy[1] - self._extent_xy[0])
+        if not minor:  # major ticks
+            prev_xy = None
+            for ctr, ((xy, a), l) in enumerate(zip(
+                    _grid_info[lon_or_lat]["tick_locs"][axis_side],
+                    _grid_info[lon_or_lat]["tick_labels"][axis_side])):
+                angle_normal = a
+
+                if ctr > 0 and lon_or_lat == 'lon':
+                    # Check if this is too close to the last label.
+                    if abs(xy[0] - prev_xy[0])/delta_x < 0.05:
+                        continue
+                prev_xy = xy
+                yield xy, angle_normal, angle_tangent, l
+        else:
+            for (xy, a), l in zip(
+                    _grid_info[lon_or_lat]["tick_locs"][axis_side],
+                    _grid_info[lon_or_lat]["tick_labels"][axis_side]):
+                angle_normal = a
+                yield xy, angle_normal, angle_tangent, ""
