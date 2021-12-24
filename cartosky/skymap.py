@@ -205,14 +205,13 @@ class Skymap():
             Axis extent [lon_min, lon_max, lat_min, lat_max] (degrees).
         """
         extreme_finder = ExtremeFinderWrapped(20, 20, self._wrap)
-        grid_locator1 = angle_helper.LocatorD(10, include_last=False)
-        grid_locator2 = angle_helper.LocatorD(6, include_last=False)
+        grid_locator1 = angle_helper.LocatorD(10, include_last=True)
+        grid_locator2 = angle_helper.LocatorD(6, include_last=True)
 
         tick_formatter1 = WrappedFormatterDMS(self._wrap)
         tick_formatter2 = angle_helper.FormatterDMS()
 
         grid_helper = GridHelperCurveLinear(
-            # (tr, inv_tr),
             (self.proj, self.proj_inverse),
             extreme_finder=extreme_finder,
             grid_locator1=grid_locator1,
@@ -220,14 +219,11 @@ class Skymap():
             tick_formatter1=tick_formatter1,
             tick_formatter2=tick_formatter2,
         )
-        self._grid_helper = grid_helper
 
         fig = self._ax.figure
         rect = self._ax.get_position()
         self._aa = axisartist.Axes(fig, rect, grid_helper=grid_helper, frameon=False)
         fig.add_axes(self._aa)
-
-        self._grid_helper = grid_helper
 
         def format_coord(x, y):
             return 'lon=%1.4f, lat=%1.4f' % (self.proj_inverse(x, y))
