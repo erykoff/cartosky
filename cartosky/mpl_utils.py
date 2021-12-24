@@ -80,10 +80,6 @@ class ExtremeFinderWrapped(ExtremeFinderSimple):
 class GridHelperSkymap(GridHelperCurveLinear):
     """GridHelperCurveLinear with tick overlap protection.
     """
-    def __init__(self, *args, extent_xy=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._extent_xy = extent_xy
-
     def get_tick_iterator(self, nth_coord, axis_side, minor=False):
 
         try:
@@ -94,7 +90,13 @@ class GridHelperSkymap(GridHelperCurveLinear):
         angle_tangent = dict(left=90, right=90, bottom=0, top=0)[axis_side]
         lon_or_lat = ["lon", "lat"][nth_coord]
         if lon_or_lat == "lon":
-            delta_x = abs(self._extent_xy[1] - self._extent_xy[0])
+            # Need to compute maximum extent in the x direction
+            x_min = 1e100
+            x_max = -1e100
+            for line in _grid_info['lon_lines']:
+                x_min = min((x_min, np.min(line[0])))
+                x_max = max((x_max, np.max(line[0])))
+            delta_x = x_max - x_min
         if not minor:  # major ticks
             prev_xy = None
             for ctr, ((xy, a), l) in enumerate(zip(

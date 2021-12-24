@@ -218,9 +218,10 @@ class Skymap():
             grid_locator1=grid_locator1,
             grid_locator2=grid_locator2,
             tick_formatter1=tick_formatter1,
-            tick_formatter2=tick_formatter2,
-            extent_xy=self._ax.get_extent()
+            tick_formatter2=tick_formatter2
         )
+
+        self._grid_helper = grid_helper
 
         fig = self._ax.figure
         rect = self._ax.get_position()
