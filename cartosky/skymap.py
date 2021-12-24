@@ -43,6 +43,8 @@ class Skymap():
                  extent=None, **kwargs):
         # self.set_observer(kwargs.pop('observer', None))
         # self.set_date(kwargs.pop('date', None))
+        self._hpxmap = None
+        self._hspmap = None
 
         if ax is None:
             ax = plt.gca()
@@ -217,7 +219,7 @@ class Skymap():
             grid_locator2=grid_locator2,
             tick_formatter1=tick_formatter1,
             tick_formatter2=tick_formatter2,
-            extent_xy = self._ax.get_extent()
+            extent_xy=self._ax.get_extent()
         )
 
         fig = self._ax.figure
@@ -225,10 +227,7 @@ class Skymap():
         self._aa = axisartist.Axes(fig, rect, grid_helper=grid_helper, frameon=False)
         fig.add_axes(self._aa)
 
-        def format_coord(x, y):
-            return 'lon=%1.4f, lat=%1.4f' % (self.proj_inverse(x, y))
-
-        self._aa.format_coord = format_coord
+        self._aa.format_coord = self._format_coord
         self._aa.axis['left'].major_ticklabels.set_visible(True)
         self._aa.axis['right'].major_ticklabels.set_visible(False)
         self._aa.axis['bottom'].major_ticklabels.set_visible(True)
@@ -240,6 +239,40 @@ class Skymap():
         fig.sca(self._ax)
 
         return fig, self._ax
+
+    def _format_coord(self, x, y):
+        """Return a coordinate format string.
+
+        Parameters
+        ----------
+        x : `float`
+            x position in projected coords.
+        y : `float`
+            y position in projected coords.
+
+        Returns
+        -------
+        coord_string : `str`
+            Formatted string.
+        """
+        lon, lat = self.proj_inverse(x, y)
+        # FIXME: check for out-of-bounds here?
+        coord_string = 'lon=%.6f, lat=%.6f' % (lon, lat)
+        if np.isnan(lon) or np.isnan(lat):
+            val = hp.UNSEEN
+        elif self._hspmap is not None:
+            val = self._hspmap.get_values_pos(lon, lat)
+        elif self._hpxmap is not None:
+            pix = hp.ang2pix(self._hpxmap_nside, lon, lat, lonlat=True, nest=self._hpxmap_nest)
+            val = self._hpxmap[pix]
+        else:
+            return coord_string
+
+        if np.isclose(val, hp.UNSEEN):
+            coord_string += ', val=UNSEEN'
+        else:
+            coord_string += ', val=%f' % (val)
+        return coord_string
 
     def set_xlabel(self, text, side='bottom', **kwargs):
         """Set the label on the x axis.
@@ -504,6 +537,11 @@ class Skymap():
         nside = hp.npix2nside(hpxmap.size)
         pixels, = np.where(hpxmap != hp.UNSEEN)
 
+        self._hspmap = None
+        self._hpxmap = hpxmap
+        self._hpxmap_nside = nside
+        self._hpxmap_nest = nest
+
         if lon_range is None or lat_range is None:
             _lon_range, _lat_range = healpix_pixels_range(nside,
                                                           pixels,
@@ -653,6 +691,9 @@ class Skymap():
         values_raster : `np.ma.MaskedArray`
             Masked array of rasterized values.
         """
+        self._hspmap = hspmap
+        self._hpxmap = None
+
         valid_pixels = hspmap.valid_pixels
 
         if lon_range is None or lat_range is None:
