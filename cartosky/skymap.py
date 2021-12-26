@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import warnings
 import numpy as np
 import healpy as hp
 
@@ -43,8 +44,14 @@ class Skymap():
                  extent=None, **kwargs):
         # self.set_observer(kwargs.pop('observer', None))
         # self.set_date(kwargs.pop('date', None))
-        self._hpxmap = None
-        self._hspmap = None
+        self._redraw_dict = {'hpxmap': None,
+                             'hspmap': None,
+                             'vmin': None,
+                             'vmax': None,
+                             'xsize': None,
+                             'kwargs_pcolormesh': None,
+                             'nside': None,
+                             'nest': None}
 
         if ax is None:
             ax = plt.gca()
@@ -142,6 +149,10 @@ class Skymap():
         if self.do_gridlines:
             self._aa.grid(True, linestyle=':', color='k', lw=0.5)
 
+        self._extent = extent
+        self._changed_x_axis = False
+        self._changed_y_axis = False
+
     def _set_axes_limits(self, extent, invert=True):
         """Set axis limits from an extent.
 
@@ -225,7 +236,7 @@ class Skymap():
 
         fig = self._ax.figure
         rect = self._ax.get_position()
-        self._aa = axisartist.Axes(fig, rect, grid_helper=grid_helper, frameon=False)
+        self._aa = axisartist.Axes(fig, rect, grid_helper=grid_helper, frameon=False, aspect=1.0)
         fig.add_axes(self._aa)
 
         self._aa.format_coord = self._format_coord
@@ -261,11 +272,15 @@ class Skymap():
         coord_string = 'lon=%.6f, lat=%.6f' % (lon, lat)
         if np.isnan(lon) or np.isnan(lat):
             val = hp.UNSEEN
-        elif self._hspmap is not None:
-            val = self._hspmap.get_values_pos(lon, lat)
-        elif self._hpxmap is not None:
-            pix = hp.ang2pix(self._hpxmap_nside, lon, lat, lonlat=True, nest=self._hpxmap_nest)
-            val = self._hpxmap[pix]
+        elif self._redraw_dict['hspmap'] is not None:
+            val = self._redraw_dict['hspmap'].get_values_pos(lon, lat)
+        elif self._redraw_dict['hpxmap'] is not None:
+            pix = hp.ang2pix(self._redraw_dict['nside'],
+                             lon,
+                             lat,
+                             lonlat=True,
+                             nest=self._redraw_dict['nest'])
+            val = self._redraw_dict['hpxmap'][pix]
         else:
             return coord_string
 
@@ -274,6 +289,53 @@ class Skymap():
         else:
             coord_string += ', val=%f' % (val)
         return coord_string
+
+    def _change_axis(self, ax):
+        """Callback for axis change.
+
+        Parameters
+        ----------
+        ax : `cartopy.mpl.geoaxes.GeoAxesSubplot`
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            extent = ax.get_extent(crs=PlateCarree())
+        if not np.isclose(extent[0], self._extent[0]) or not np.isclose(extent[1], self._extent[1]):
+            self._changed_x_axis = True
+        if not np.isclose(extent[2], self._extent[2]) or not np.isclose(extent[3], self._extent[3]):
+            self._changed_y_axis = True
+
+        if not self._changed_x_axis or not self._changed_y_axis:
+            # Nothing to do yet.
+            return
+
+        lon_range = [extent[0], extent[1]]
+        lat_range = [extent[2], extent[3]]
+
+        if self._redraw_dict['hpxmap'] is not None:
+            lon_raster, lat_raster, values_raster = hpxmap_to_xy(self._redraw_dict['hpxmap'],
+                                                                 lon_range,
+                                                                 lat_range,
+                                                                 nest=self._redraw_dict['nest'],
+                                                                 xsize=self._redraw_dict['xsize'])
+            im = self.pcolormesh(lon_raster, lat_raster, values_raster,
+                                 vmin=self._redraw_dict['vmin'],
+                                 vmax=self._redraw_dict['vmax'],
+                                 **self._redraw_dict['kwargs_pcolormesh'])
+            self._ax._sci(im)
+        elif self._redraw_dict['hspmap'] is not None:
+            lon_raster, lat_raster, values_raster = hspmap_to_xy(self._redraw_dict['hspmap'],
+                                                                 lon_range,
+                                                                 lat_range,
+                                                                 xsize=self._redraw_dict['xsize'])
+
+            im = self.pcolormesh(lon_raster, lat_raster, values_raster,
+                                 vmin=self._redraw_dict['vmin'],
+                                 vmax=self._redraw_dict['vmax'],
+                                 **self._redraw_dict['kwargs_pcolormesh'])
+            self._ax._sci(im)
+            # FIXME: why is it spilling out over the edge?
+            # Okay, it's spilling a lot less...
 
     def set_xlabel(self, text, side='bottom', **kwargs):
         """Set the label on the x axis.
@@ -538,11 +600,6 @@ class Skymap():
         nside = hp.npix2nside(hpxmap.size)
         pixels, = np.where(hpxmap != hp.UNSEEN)
 
-        self._hspmap = None
-        self._hpxmap = hpxmap
-        self._hpxmap_nside = nside
-        self._hpxmap_nest = nest
-
         if lon_range is None or lat_range is None:
             _lon_range, _lat_range = healpix_pixels_range(nside,
                                                           pixels,
@@ -572,8 +629,21 @@ class Skymap():
                                          lat_raster[:-1, :-1][~values_raster.mask])
             self.set_extent(extent)
 
-        im = self.pcolormesh(lon_raster, lat_raster, values_raster, **kwargs)
+        im = self.pcolormesh(lon_raster, lat_raster, values_raster, vmin=vmin, vmax=vmax, **kwargs)
         self._ax._sci(im)
+
+        # Link up callbacks
+        self._xlc = self._ax.callbacks.connect('xlim_changed', self._change_axis)
+        self._ylc = self._ax.callbacks.connect('ylim_changed', self._change_axis)
+        self._redraw_dict['hspmap'] = None
+        self._redraw_dict['hpxmap'] = hpxmap
+        self._redraw_dict['nside'] = nside
+        self._redraw_dict['nest'] = nest
+        self._redraw_dict['vmin'] = vmin
+        self._redraw_dict['vmax'] = vmax
+        self._redraw_dict['xsize'] = xsize
+        self._redraw_dict['kwargs_pcolormesh'] = kwargs
+
         return im, lon_raster, lat_raster, values_raster
 
     def draw_hpxpix(self, nside, pixels, values, nest=False, zoom=True, xsize=1000,
@@ -652,7 +722,7 @@ class Skymap():
                                          lat_raster[:-1, :-1][~values_raster.mask])
             self.set_extent(extent)
 
-        im = self.pcolormesh(lon_raster, lat_raster, values_raster, **kwargs)
+        im = self.pcolormesh(lon_raster, lat_raster, values_raster, vmin=vmin, vmax=vmax, **kwargs)
         self._ax._sci(im)
         return im, lon_raster, lat_raster, values_raster
 
@@ -726,8 +796,18 @@ class Skymap():
                                          lat_raster[:-1, :-1][~values_raster.mask])
             self.set_extent(extent)
 
-        im = self.pcolormesh(lon_raster, lat_raster, values_raster, **kwargs)
+        im = self.pcolormesh(lon_raster, lat_raster, values_raster, vmin=vmin, vmax=vmax, **kwargs)
         self._ax._sci(im)
+
+        # Link up callbacks
+        self._xlc = self._ax.callbacks.connect('xlim_changed', self._change_axis)
+        self._ylc = self._ax.callbacks.connect('ylim_changed', self._change_axis)
+        self._redraw_dict['hspmap'] = hspmap
+        self._redraw_dict['hpxmap'] = None
+        self._redraw_dict['vmin'] = vmin
+        self._redraw_dict['vmax'] = vmax
+        self._redraw_dict['xsize'] = xsize
+        self._redraw_dict['kwargs_pcolormesh'] = kwargs
 
         return im, lon_raster, lat_raster, values_raster
 
