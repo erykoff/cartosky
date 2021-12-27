@@ -309,6 +309,11 @@ class Skymap():
             # Nothing to do yet.
             return
 
+        # Reset to new extent
+        self._changed_x_axis = False
+        self._changed_y_axis = False
+        self._extent = extent
+
         lon_range = [extent[0], extent[1]]
         lat_range = [extent[2], extent[3]]
 
@@ -318,24 +323,20 @@ class Skymap():
                                                                  lat_range,
                                                                  nest=self._redraw_dict['nest'],
                                                                  xsize=self._redraw_dict['xsize'])
-            im = self.pcolormesh(lon_raster, lat_raster, values_raster,
-                                 vmin=self._redraw_dict['vmin'],
-                                 vmax=self._redraw_dict['vmax'],
-                                 **self._redraw_dict['kwargs_pcolormesh'])
-            self._ax._sci(im)
         elif self._redraw_dict['hspmap'] is not None:
             lon_raster, lat_raster, values_raster = hspmap_to_xy(self._redraw_dict['hspmap'],
                                                                  lon_range,
                                                                  lat_range,
                                                                  xsize=self._redraw_dict['xsize'])
+        else:
+            # Nothing to do
+            return
 
-            im = self.pcolormesh(lon_raster, lat_raster, values_raster,
-                                 vmin=self._redraw_dict['vmin'],
-                                 vmax=self._redraw_dict['vmax'],
-                                 **self._redraw_dict['kwargs_pcolormesh'])
-            self._ax._sci(im)
-            # FIXME: why is it spilling out over the edge?
-            # Okay, it's spilling a lot less...
+        im = self.pcolormesh(lon_raster, lat_raster, values_raster,
+                             vmin=self._redraw_dict['vmin'],
+                             vmax=self._redraw_dict['vmax'],
+                             **self._redraw_dict['kwargs_pcolormesh'])
+        self._ax._sci(im)
 
     def set_xlabel(self, text, side='bottom', **kwargs):
         """Set the label on the x axis.
