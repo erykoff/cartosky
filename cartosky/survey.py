@@ -1,7 +1,7 @@
 from .skymap import Skymap
 from .utils import get_datafile  # fix this
 
-__all__ = ['SurveySkymap', 'DESSkymap', 'BlissSkymap',
+__all__ = ['SurveySkymap', 'DESSkymap', 'BlissSkymap', 'MaglitesSkymap',
            'DecalsSkymap']
 
 
@@ -106,11 +106,11 @@ class BlissSkymap(SurveySkymap):
                          celestial=celestial, extent=extent, **kwargs)
 
 
-# class MaglitesSkymap(SurveySkymap):
-#     def __init__(self, ax=None, projection_name='', lon_0=0, lat_0=-90, gridlines=True,
-#                  celestial=True, extent=None, **kwargs):
-#         super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, lat_0=lat_0,
-#                          gridlines=gridlines, celestial=celestial, extent=extent, **kwargs)
+class MaglitesSkymap(SurveySkymap):
+    def __init__(self, ax=None, projection_name='ortho', lon_0=0, lat_0=-90, gridlines=True,
+                 celestial=True, extent=[-150, 70, -85, -50], **kwargs):
+        super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, lat_0=lat_0,
+                         gridlines=gridlines, celestial=celestial, extent=extent, **kwargs)
 
 
 class DecalsSkymap(SurveySkymap):
