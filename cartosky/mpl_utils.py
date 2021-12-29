@@ -8,8 +8,14 @@ __all__ = ['WrappedFormatterDMS', 'ExtremeFinderWrapped', 'GridHelperSkymap']
 
 
 class WrappedFormatterDMS(angle_helper.FormatterDMS):
-    def __init__(self, wrap):
+    def __init__(self, wrap, longitude_ticks):
         self._wrap = wrap
+        if longitude_ticks == 'positive':
+            self._longitude_ticks = 1
+        elif longitude_ticks == 'symmetric':
+            self._longitude_ticks = -1
+        else:
+            raise ValueError("longitude_ticks must be `positive` or `symmetric`.")
         super().__init__()
 
     def _wrap_values(self, factor, values):
@@ -28,9 +34,14 @@ class WrappedFormatterDMS(angle_helper.FormatterDMS):
             Array of wrapped values, scaled by factor.
         """
         _values = np.atleast_1d(values)/factor
-        _values = factor*((_values + self._wrap) % 360 - self._wrap)
-        _values[np.isclose(_values, -180.0)] = 180.0
-        return _values
+        _values = (_values + self._wrap) % 360 - self._wrap
+        if self._longitude_ticks == 1:
+            # Values should all be positive, 0 to 360
+            _values %= 360.0
+        else:
+            # Additional test to set -180 to positive 180
+            _values[np.isclose(_values, -180.0)] = 180.0
+        return factor*_values
 
     def __call__(self, direction, factor, values):
         return super().__call__(direction, factor, self._wrap_values(factor, values))

@@ -37,11 +37,14 @@ class Skymap():
         Default exent of the map, [lon_min, lon_max, lat_min, lat_max].
         Note that lon_min, lon_max can be specified in any order, the
         orientation of the map is set by ``celestial``.
+    longitude_ticks : `str`, optional
+        Label longitude ticks from 0 to 360 degrees (``positive``) or
+        from -180 to 180 degrees (``symmetric``).
     **kwargs : `dict`, optional
         Additional arguments to send to cartosky/proj4 projection initialization.
     """
     def __init__(self, ax=None, projection_name='cyl', lon_0=0, gridlines=True, celestial=True,
-                 extent=None, **kwargs):
+                 extent=None, longitude_ticks='positive', **kwargs):
         # self.set_observer(kwargs.pop('observer', None))
         # self.set_date(kwargs.pop('date', None))
         self._redraw_dict = {'hpxmap': None,
@@ -52,6 +55,13 @@ class Skymap():
                              'kwargs_pcolormesh': None,
                              'nside': None,
                              'nest': None}
+
+        if longitude_ticks == 'positive':
+            self._longitude_ticks = longitude_ticks
+        elif longitude_ticks == 'symmetric':
+            self._longitude_ticks = longitude_ticks
+        else:
+            raise ValueError("longitude_ticks must be 'positive' or 'symmetric'.")
 
         if ax is None:
             ax = plt.gca()
@@ -245,7 +255,7 @@ class Skymap():
         grid_locator2 = angle_helper.LocatorD(6, include_last=True)
 
         # We always want the formatting to be wrapped at 180 (-180 to 180)
-        tick_formatter1 = WrappedFormatterDMS(180.0)
+        tick_formatter1 = WrappedFormatterDMS(180.0, self._longitude_ticks)
         tick_formatter2 = angle_helper.FormatterDMS()
 
         grid_helper = GridHelperSkymap(
@@ -294,6 +304,8 @@ class Skymap():
         """
         lon, lat = self.proj_inverse(x, y)
         # FIXME: check for out-of-bounds here?
+        if self._longitude_ticks == 'positive':
+            lon %= 360.0
         coord_string = 'lon=%.6f, lat=%.6f' % (lon, lat)
         if np.isnan(lon) or np.isnan(lat):
             val = hp.UNSEEN
