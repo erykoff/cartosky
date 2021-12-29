@@ -73,8 +73,8 @@ class ExtremeFinderWrapped(ExtremeFinderSimple):
         lat_min = np.clip(lat_min, -90.0, 90.0)
         lat_max = np.clip(lat_max, -90.0, 90.0)
 
-        lon_min = np.clip(lon_min, -self._wrap, self._wrap)
-        lon_max = np.clip(lon_max, -self._wrap, self._wrap)
+        lon_min = np.clip(lon_min, -self._wrap, -self._wrap + 360.)
+        lon_max = np.clip(lon_max, -self._wrap, -self._wrap + 360.)
 
         return lon_min, lon_max, lat_min, lat_max
 

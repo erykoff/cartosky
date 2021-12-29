@@ -60,7 +60,10 @@ class Skymap():
         subspec = ax.get_subplotspec()
         fig.delaxes(ax)
 
-        if lon_0 == 180.0:
+        # Map lon_0 to be between -180.0 and 180.0
+        lon_0 = (lon_0 + 180.) % 360. - 180.
+
+        if abs(lon_0) == 180.0:
             # We must move this by epsilon or the code gets confused with 0 == 360
             lon_0 = 179.9999
 
