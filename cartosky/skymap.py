@@ -504,10 +504,25 @@ class Skymap():
         for i in range(len(_lon) - 1):
             lonlats = np.array(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
                                       initial_idx=0, terminus_idx=0))
-            self.plot(lonlats[:, 0], lonlats[:, 1], color=color, linestyle=linestyle,
-                      **kwargs)
-            # Only add label to first line segment.
-            kwargs.pop('label', None)
+            # Check for lines that wrap around and clip these in two...
+            lon_test = (lonlats[:, 0] + self._wrap) % 360. - self._wrap
+            delta = lon_test[: -1] - lon_test[1:]
+            cut, = np.where(delta > 180.0)
+            if cut.size == 0:
+                # No wrap
+                self.plot(lonlats[:, 0], lonlats[:, 1], color=color, linestyle=linestyle,
+                          **kwargs)
+                # Only add label to first line segment.
+                kwargs.pop('label', None)
+            else:
+                # We have a wrap
+                cut = cut[0] + 1
+                self.plot(lonlats[0: cut, 0], lonlats[0: cut, 1], color=color, linestyle=linestyle,
+                          **kwargs)
+                # Only add label to first line segment.
+                kwargs.pop('label', None)
+                self.plot(lonlats[cut:, 0], lonlats[cut:, 1], color=color, linestyle=linestyle,
+                          **kwargs)
 
     def draw_polygon_lonlat(self, lon, lat, color='red', linestyle='solid',
                             **kwargs):
