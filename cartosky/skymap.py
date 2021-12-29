@@ -505,7 +505,7 @@ class Skymap():
             lonlats = np.array(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
                                       initial_idx=0, terminus_idx=0))
             # Check for lines that wrap around and clip these in two...
-            lon_test = (lonlats[:, 0] + self._wrap) % 360. - self._wrap
+            lon_test = (lonlats[:, 0] + 180.) % 360. - 180.
             delta = lon_test[: -1] - lon_test[1:]
             cut, = np.where(delta > 180.0)
             if cut.size == 0:
