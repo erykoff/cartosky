@@ -28,7 +28,9 @@ class WrappedFormatterDMS(angle_helper.FormatterDMS):
             Array of wrapped values, scaled by factor.
         """
         _values = np.atleast_1d(values)/factor
-        return factor*((_values + self._wrap) % 360 - self._wrap)
+        _values = factor*((_values + self._wrap) % 360 - self._wrap)
+        _values[np.isclose(_values, -180.0)] = 180.0
+        return _values
 
     def __call__(self, direction, factor, values):
         return super().__call__(direction, factor, self._wrap_values(factor, values))
@@ -106,7 +108,7 @@ class GridHelperSkymap(GridHelperCurveLinear):
 
                 if ctr > 0 and lon_or_lat == 'lon':
                     # Check if this is too close to the last label.
-                    if abs(xy[0] - prev_xy[0])/delta_x < 0.1:
+                    if abs(xy[0] - prev_xy[0])/delta_x < 0.05:
                         continue
                 prev_xy = xy
                 yield xy, angle_normal, angle_tangent, l
