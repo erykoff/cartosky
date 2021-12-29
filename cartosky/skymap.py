@@ -4,13 +4,13 @@ import numpy as np
 import healpy as hp
 
 from cartopy.crs import PlateCarree
-from shapely.geometry.polygon import Polygon, LineString
+from pyproj import Geod
 
 import mpl_toolkits.axisartist as axisartist
 import mpl_toolkits.axisartist.angle_helper as angle_helper
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from .projections import get_projection
+from .projections import get_projection, RADIUS
 from .hpx_utils import healpix_pixels_range, hspmap_to_xy, hpxmap_to_xy, healpix_to_xy, healpix_bin
 from .mpl_utils import ExtremeFinderWrapped, WrappedFormatterDMS, GridHelperSkymap
 
@@ -60,6 +60,10 @@ class Skymap():
         subspec = ax.get_subplotspec()
         fig.delaxes(ax)
 
+        if lon_0 == 180.0:
+            # We must move this by epsilon or the code gets confused with 0 == 360
+            lon_0 = 179.9999
+
         kwargs['lon_0'] = lon_0
         self.projection = get_projection(projection_name, **kwargs)
         self._ax = fig.add_subplot(subspec, projection=self.projection)
@@ -74,7 +78,7 @@ class Skymap():
         self._lon_0 = self.projection.proj4_params['lon_0']
 
         if extent is None:
-            extent = [-self._wrap, self._wrap, -90.0, 90.0]
+            extent = [lon_0 - 180.0, lon_0 + 180.0, -90.0, 90.0]
 
         self.set_extent(extent)
 
@@ -153,6 +157,16 @@ class Skymap():
         self._changed_x_axis = False
         self._changed_y_axis = False
 
+    def get_extent(self):
+        """Get the extent in lon/lat coordinates.
+
+        Returns
+        -------
+        extent : `list`
+            Extent as [lon_min, lon_max, lat_min, lat_max].
+        """
+        return self._extent
+
     def _set_axes_limits(self, extent, invert=True):
         """Set axis limits from an extent.
 
@@ -166,8 +180,13 @@ class Skymap():
 
         # Check if the longitude range is the full sphere.
         if np.isclose(np.abs(extent[0] - extent[1]), 360.0):
+            lon_steps = extent[2:]
+            if extent[2] < 0 and extent[3] > 0:
+                lon_steps.append(0.0)
+
             lon, lat = np.meshgrid(
-                np.linspace(extent[0], extent[1], 20), np.linspace(extent[2], extent[3], 20)
+                np.arange(360.0),
+                lon_steps
             )
             x, y = self.proj(lon.ravel(), lat.ravel())
             # Need to offset this by some small amount to ensure we don't get
@@ -187,15 +206,17 @@ class Skymap():
                                                             extent_xform[2],
                                                             extent_xform[1],
                                                             extent_xform[3])
-        if np.isclose(np.abs(lon_max - lon_min), 360.0):
-            # Draw the outer edges of the projection.  This needs to be forward-
-            # projected and drawn in that space to prevent out-of-bounds clipping.
-            x, y = self.proj(np.linspace(self._lon_0 - 180., self._lon_0 - 180.),
-                             np.linspace(-90., 90.))
-            self.plot(x, y, 'k-', transform=self.projection)
-            x, y = self.proj(np.linspace(self._lon_0 + 180., self._lon_0 + 180.),
-                             np.linspace(-90., 90.))
-            self.plot(x, y, 'k-', transform=self.projection)
+
+        # Draw the outer edges of the projection.  This needs to be forward-
+        # projected and drawn in that space to prevent out-of-bounds clipping.
+        # It also needs to be done just inside -180/180 to prevent the transform
+        # from resolving to the same line.
+        x, y = self.proj(np.linspace(self._lon_0 - 179.9999, self._lon_0 - 179.9999),
+                         np.linspace(-90., 90.))
+        self.plot(x, y, 'k-', transform=self.projection)
+        x, y = self.proj(np.linspace(self._lon_0 + 179.9999, self._lon_0 + 179.9999),
+                         np.linspace(-90., 90.))
+        self.plot(x, y, 'k-', transform=self.projection)
 
         if self._aa is not None:
             self._aa.set_xlim(self._ax.get_xlim())
@@ -220,7 +241,8 @@ class Skymap():
         grid_locator1 = angle_helper.LocatorD(10, include_last=True)
         grid_locator2 = angle_helper.LocatorD(6, include_last=True)
 
-        tick_formatter1 = WrappedFormatterDMS(self._wrap)
+        # We always want the formatting to be wrapped at 180 (-180 to 180)
+        tick_formatter1 = WrappedFormatterDMS(180.0)
         tick_formatter2 = angle_helper.FormatterDMS()
 
         grid_helper = GridHelperSkymap(
@@ -450,17 +472,14 @@ class Skymap():
         # FIXME: do we want to set the extent automatically here?
         return self._ax.hexbin(*args, transform=transform, **kwargs)
 
-    def legend(self, *args, **kwargs):
+    def legend(self, *args, loc='upper left', **kwargs):
         """Add legend to the axis with ax.legend(*args, **kwargs)."""
-        return self._ax.legend(*args, **kwargs)
+        return self._ax.legend(*args, loc='upper left', **kwargs)
 
     def draw_line_lonlat(self, lon, lat,
-                         edgecolor='k', facecolor='none',
+                         color='black', linestyle='solid', nsamp=100,
                          **kwargs):
         """Draw a line assuming a Geodetic transform.
-
-        This uses the `shapely.geometry.LineString` class to describe
-        a one-dimensional figure comprising one or more line segments.
 
         Parameters
         ----------
@@ -468,27 +487,31 @@ class Skymap():
             Array of longitude points in the line segments.
         lat : `np.ndarray`
             Array of latitude points in the line segments.
-        edgecolor : `str`, optional
+        color : `str`, optional
             Color of line segments.
-        facecolor : `str`, optional
-            Face color of line-segment polygons.
+        linestyle : `str`, optional
+            Line style for segments.
+        nsamp : `int`, optional
+            Number of samples for each line segment.
+        label : `str`, optional
+            Legend label string.
         **kwargs : `dict`
             Additional keywords passed to plot.
         """
-        line = LineString(list(zip(lon, lat))[::-1])
-        # Passing transform is always an error here, so filter it out.
-        kwargs.pop('transform', None)
-        # Note that setting crs=None yields a great circle, as desired.
-        return self._ax.add_geometries([line],
-                                       crs=None,
-                                       edgecolor=edgecolor,
-                                       facecolor=facecolor,
-                                       **kwargs)
+        _lon = np.atleast_1d(lon)
+        _lat = np.atleast_1d(lat)
+        g = Geod(a=RADIUS)
+        for i in range(len(_lon) - 1):
+            lonlats = np.array(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
+                                      initial_idx=0, terminus_idx=0))
+            self.plot(lonlats[:, 0], lonlats[:, 1], color=color, linestyle=linestyle,
+                      **kwargs)
+            # Only add label to first line segment.
+            kwargs.pop('label', None)
 
-    def draw_polygon_lonlat(self, lon, lat,
-                            edgecolor='red', facecolor='none',
+    def draw_polygon_lonlat(self, lon, lat, color='red', linestyle='solid',
                             **kwargs):
-        """Draw a shapely Polygon from a list of lon, lat coordinates.
+        """Plot a polygon from a list of lon, lat coordinates.
 
         Parameters
         ----------
@@ -496,32 +519,25 @@ class Skymap():
             Array of longitude points in polygon.
         lat : `np.ndarray`
             Array of latitude points in polygon.
-        edgecolor : `str`
+        color : `str`, optional
             Color of polygon boundary.
-        facecolor : `str`
-            Color of polygon face.
-        **kwargs : `dict`
+        linestyle : `str`, optional
+            Line style for boundary.
+        label : `str`, optional
+            Legend label string.
+        **kwargs : `dict`, optional
             Additional keywords passed to plot.
         """
         lon = np.atleast_1d(lon).ravel()
         lat = np.atleast_1d(lat).ravel()
-        coords = np.vstack([lon, lat]).T
-        poly = Polygon(coords)
-        # Passing transform is always an error here, so filter it out.
-        kwargs.pop('transform', None)
-        # Note that crs=None yields line segments that are great circles.
-        self._ax.add_geometries([poly],
-                                crs=None,
-                                edgecolor=edgecolor,
-                                facecolor=facecolor,
-                                **kwargs)
-        if 'label' in kwargs:
-            # Make a hidden plot to add this to the legend dict.
-            self.plot(np.nan, np.nan, color=edgecolor, label=kwargs['label'])
-        return poly
+        # Add the first point at the end to ensure a closed polygon.
+        lon = np.append(lon, lon[0])
+        lat = np.append(lat, lat[0])
+
+        self.draw_line_lonlat(lon, lat, color=color, linestyle=linestyle, **kwargs)
 
     def draw_polygon_file(self, filename, reverse=True,
-                          edgecolor='red', facecolor='none', **kwargs):
+                          color='red', linestyle='solid', **kwargs):
         """Draw a text file containing lon, lat coordinates of polygon(s).
 
         Parameters
@@ -530,10 +546,10 @@ class Skymap():
             Name of file containing the polygon(s) [lon, lat, poly]
         reverse : `bool`
             Reverse drawing order of points in each polygon.
-        edgecolor : `str`
+        color : `str`
             Color of polygon boundary.
-        facecolor : `str`
-            Color of polygon face.
+        linestyle : `str`, optional
+            Line style for boundary.
         **kwargs : `dict`
             Additional keywords passed to plot.
         """
@@ -544,20 +560,17 @@ class Skymap():
             data = np.genfromtxt(filename, names=['lon', 'lat'])
             data = append_fields(data, 'poly', np.zeros(len(data)))
 
-        ret = []
         for p in np.unique(data['poly']):
             poly = data[data['poly'] == p]
             lon = poly['lon'][::-1] if reverse else poly['lon']
             lat = poly['lat'][::-1] if reverse else poly['lat']
-            feat = self.draw_polygon_lonlat(lon,
-                                            lat,
-                                            edgecolor=edgecolor,
-                                            facecolor=facecolor,
-                                            **kwargs)
-            ret += [feat]
+            self.draw_polygon_lonlat(lon,
+                                     lat,
+                                     color=color,
+                                     linestyle=linestyle,
+                                     **kwargs)
+            # Only add the label to the first polygon plotting.
             kwargs.pop('label', None)
-
-        return ret
 
     def draw_hpxmap(self, hpxmap, nest=False, zoom=True, xsize=1000, vmin=None, vmax=None,
                     rasterized=True, lon_range=None, lat_range=None, **kwargs):

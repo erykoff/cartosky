@@ -1,7 +1,8 @@
 from .skymap import Skymap
 from .utils import get_datafile  # fix this
 
-__all__ = ['SurveySkymap', 'DESSkymap']
+__all__ = ['SurveySkymap', 'DESSkymap', 'BlissSkymap',
+           'DecalsSkymap']
 
 
 class SurveySkymap(Skymap):
@@ -11,18 +12,27 @@ class SurveySkymap(Skymap):
         """Draw the DES footprint."""
         return self.draw_des17(**kwargs)
 
-    def draw_des17(self, edgecolor='red', lw=2, **kwargs):
+    def draw_des17(self, color='red', lw=2, **kwargs):
         """Draw the DES 2017 footprint."""
         filename = get_datafile('des-round17-poly.txt')
-        return self.draw_polygon_file(filename, edgecolor=edgecolor, lw=lw, **kwargs)
+        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
 
+    def draw_decals(self, color='red', lw=2, **kwargs):
+        """Draw the DECaLS footprint."""
+        filename = get_datafile('decals-poly.txt')
+        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
 
-class DESSkymap(SurveySkymap):
-    def __init__(self, ax=None, projection_name='mbtfpq', lon_0=0, gridlines=True,
-                 celestial=True, extent=[90, -50, -75, 10], **kwargs):
-        super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, gridlines=gridlines,
-                         celestial=celestial, extent=extent, **kwargs)
+    def draw_maglites(self, color='blue', lw=2, **kwargs):
+        """Draw the MagLiteS footprint."""
+        filename = get_datafile('maglites-poly.txt')
+        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
 
+    def draw_bliss(self, color='magenta', lw=2, **kwargs):
+        """Draw the BLISS footprint."""
+        filename = get_datafile('bliss-poly.txt')
+        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
+
+    # Override zoom default for survey maps to keep the default fixed.
     def draw_hpxmap(self, hpxmap, nest=False, zoom=False, xsize=1000, vmin=None, vmax=None,
                     rasterized=True, lon_range=None, lat_range=None, **kwargs):
         return super().draw_hpxmap(hpxmap,
@@ -80,3 +90,31 @@ class DESSkymap(SurveySkymap):
                                    lon_range=lon_range,
                                    lat_range=lat_range,
                                    **kwargs)
+
+
+class DESSkymap(SurveySkymap):
+    def __init__(self, ax=None, projection_name='mbtfpq', lon_0=0, gridlines=True,
+                 celestial=True, extent=[90, -50, -75, 10], **kwargs):
+        super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, gridlines=gridlines,
+                         celestial=celestial, extent=extent, **kwargs)
+
+
+class BlissSkymap(SurveySkymap):
+    def __init__(self, ax=None, projection_name='mbtfpq', lon_0=100, gridlines=True,
+                 celestial=True, extent=[-60, 250, -55, 0], **kwargs):
+        super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, gridlines=gridlines,
+                         celestial=celestial, extent=extent, **kwargs)
+
+
+# class MaglitesSkymap(SurveySkymap):
+#     def __init__(self, ax=None, projection_name='', lon_0=0, lat_0=-90, gridlines=True,
+#                  celestial=True, extent=None, **kwargs):
+#         super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, lat_0=lat_0,
+#                          gridlines=gridlines, celestial=celestial, extent=extent, **kwargs)
+
+
+class DecalsSkymap(SurveySkymap):
+    def __init__(self, ax=None, projection_name='mbtfpq', lon_0=105.0, gridlines=True,
+                 celestial=True, extent=[180, -180, -30, 40], **kwargs):
+        super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, gridlines=gridlines,
+                         celestial=celestial, extent=extent, **kwargs)
