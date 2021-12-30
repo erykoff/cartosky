@@ -516,28 +516,26 @@ class Skymap():
         _lon = np.atleast_1d(lon)
         _lat = np.atleast_1d(lat)
         g = Geod(a=RADIUS)
+        lonlats = []
         for i in range(len(_lon) - 1):
-            lonlats = np.array(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
-                                      initial_idx=0, terminus_idx=0))
-            # Check for lines that wrap around and clip these in two...
-            lon_test = (lonlats[:, 0] + 180.) % 360. - 180.
-            delta = lon_test[: -1] - lon_test[1:]
-            cut, = np.where(delta > 180.0)
-            if cut.size == 0:
-                # No wrap
-                self.plot(lonlats[:, 0], lonlats[:, 1], color=color, linestyle=linestyle,
-                          **kwargs)
-                # Only add label to first line segment.
-                kwargs.pop('label', None)
-            else:
-                # We have a wrap
-                cut = cut[0] + 1
-                self.plot(lonlats[0: cut, 0], lonlats[0: cut, 1], color=color, linestyle=linestyle,
-                          **kwargs)
-                # Only add label to first line segment.
-                kwargs.pop('label', None)
-                self.plot(lonlats[cut:, 0], lonlats[cut:, 1], color=color, linestyle=linestyle,
-                          **kwargs)
+            lonlats.extend(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
+                                  initial_idx=0, terminus_idx=0))
+
+        lonlats = np.array(lonlats)
+
+        # Cut into segments that wrap around ...
+        lon_test = (lonlats[:, 0] + 180.) % 360. - 180.
+        delta = lon_test[: -1] - lon_test[1:]
+        cut, = np.where(np.abs(delta) > 180.0)
+        cut = np.append(cut, len(lon_test))
+
+        prev_index = 0
+        for c in cut:
+            self.plot(lonlats[prev_index: c + 1, 0], lonlats[prev_index: c + 1, 1],
+                      color=color, linestyle=linestyle, **kwargs)
+            prev_index = c + 1
+            # Only add label to first line segment.
+            kwargs.pop('label', None)
 
     def draw_polygon_lonlat(self, lon, lat, color='red', linestyle='solid',
                             **kwargs):
