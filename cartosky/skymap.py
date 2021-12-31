@@ -95,6 +95,10 @@ class Skymap():
 
         self.set_extent(extent)
 
+        # Set up callbacks on axis zoom.
+        self._xlc = self._ax.callbacks.connect('xlim_changed', self._change_axis)
+        self._ylc = self._ax.callbacks.connect('ylim_changed', self._change_axis)
+
     def proj(self, lon, lat):
         """Apply forward projection to a set of lon/lat positions.
 
@@ -351,6 +355,9 @@ class Skymap():
         self._changed_y_axis = False
         self._extent = extent
 
+        # This synchronizes the axis artist to the plot axes after zoom.
+        self._aa.set_position(self._ax.get_position(), which='original')
+
         lon_range = [extent[0], extent[1]]
         lat_range = [extent[2], extent[3]]
 
@@ -485,6 +492,7 @@ class Skymap():
     def hexbin(self, *args, transform=PlateCarree(), **kwargs):
         """Plot with ax.hexbin(*args, **kwargs)."""
         # FIXME: do we want to set the extent automatically here?
+        # DOES THIS EVEN WORK?  UNTESTED.
         return self._ax.hexbin(*args, transform=transform, **kwargs)
 
     def legend(self, *args, loc='upper left', **kwargs):
@@ -675,8 +683,6 @@ class Skymap():
         self._ax._sci(im)
 
         # Link up callbacks
-        self._xlc = self._ax.callbacks.connect('xlim_changed', self._change_axis)
-        self._ylc = self._ax.callbacks.connect('ylim_changed', self._change_axis)
         self._redraw_dict['hspmap'] = None
         self._redraw_dict['hpxmap'] = hpxmap
         self._redraw_dict['nside'] = nside
@@ -842,8 +848,6 @@ class Skymap():
         self._ax._sci(im)
 
         # Link up callbacks
-        self._xlc = self._ax.callbacks.connect('xlim_changed', self._change_axis)
-        self._ylc = self._ax.callbacks.connect('ylim_changed', self._change_axis)
         self._redraw_dict['hspmap'] = hspmap
         self._redraw_dict['hpxmap'] = None
         self._redraw_dict['vmin'] = vmin
