@@ -107,7 +107,7 @@ class BlissSkymap(SurveySkymap):
 
 
 class MaglitesSkymap(SurveySkymap):
-    def __init__(self, ax=None, projection_name='ortho', lon_0=0, lat_0=-90, gridlines=True,
+    def __init__(self, ax=None, projection_name='laea', lon_0=0, lat_0=-90, gridlines=True,
                  celestial=True, extent=[-150, 70, -85, -50], **kwargs):
         super().__init__(ax=ax, projection_name=projection_name, lon_0=lon_0, lat_0=lat_0,
                          gridlines=gridlines, celestial=celestial, extent=extent, **kwargs)
