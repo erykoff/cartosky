@@ -170,7 +170,9 @@ class Skymap():
         if self.do_gridlines:
             self._aa.grid(True, linestyle=':', color='k', lw=0.5)
 
-        self._extent = extent
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self._extent = self._ax.get_extent(crs=PlateCarree(central_longitude=self._lon_0))
         self._changed_x_axis = False
         self._changed_y_axis = False
 
@@ -340,7 +342,7 @@ class Skymap():
         """
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            extent = ax.get_extent(crs=PlateCarree())
+            extent = ax.get_extent(crs=PlateCarree(central_longitude=self._lon_0))
         if not np.isclose(extent[0], self._extent[0]) or not np.isclose(extent[1], self._extent[1]):
             self._changed_x_axis = True
         if not np.isclose(extent[2], self._extent[2]) or not np.isclose(extent[3], self._extent[3]):
