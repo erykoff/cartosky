@@ -43,7 +43,7 @@ def test_healsparse(tmp_path):
     m.draw_inset_colorbar()
     fname = 'healsparse_one.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)
 
@@ -54,7 +54,7 @@ def test_healsparse(tmp_path):
     m.draw_hspmap(hspmap, lon_range=[4.9, 5.3], lat_range=[4.9, 5.3])
     fname = 'healsparse_two.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)
 
@@ -72,7 +72,7 @@ def test_healpix(tmp_path):
     m.draw_inset_colorbar()
     fname = 'healsparse_one.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)
 
@@ -83,7 +83,7 @@ def test_healpix(tmp_path):
     m.draw_hpxmap(hpxmap, nest=True, lon_range=[4.9, 5.3], lat_range=[4.9, 5.3])
     fname = 'healsparse_two.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)
 
@@ -105,7 +105,7 @@ def test_hpxpix(tmp_path):
     m.draw_inset_colorbar()
     fname = 'healsparse_one.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)
 
@@ -117,6 +117,6 @@ def test_hpxpix(tmp_path):
                   lon_range=[4.9, 5.3], lat_range=[4.9, 5.3])
     fname = 'healsparse_two.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)

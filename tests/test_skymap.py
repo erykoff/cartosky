@@ -27,7 +27,7 @@ def test_skymaps_basic(tmp_path, skymap):
     m = skymap(ax=ax)
     fname = f'{m.projection_name}_full.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 10.0)
     if err:
         raise ImageComparisonFailure(err)
 
@@ -46,6 +46,6 @@ def test_skymaps_zoom(tmp_path, skymap):
     m = skymap(ax=ax, extent=[0, 50, 0, 50])
     fname = f'{m.projection_name}_zoom.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 10.0)
     if err:
         raise ImageComparisonFailure(err)

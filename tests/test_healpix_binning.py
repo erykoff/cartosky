@@ -36,7 +36,7 @@ def test_healpix_binning(tmp_path):
 
     fname = 'hpxbin.png'
     fig.savefig(tmp_path / fname)
-    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 1.0)
+    err = compare_images(os.path.join(ROOT, 'data', fname), tmp_path / fname, 40.0)
     if err:
         raise ImageComparisonFailure(err)
 
