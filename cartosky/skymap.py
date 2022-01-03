@@ -14,7 +14,7 @@ from .projections import get_projection, RADIUS
 from .hpx_utils import healpix_pixels_range, hspmap_to_xy, hpxmap_to_xy, healpix_to_xy, healpix_bin
 from .mpl_utils import ExtremeFinderWrapped, WrappedFormatterDMS, GridHelperSkymap
 
-__all__ = ['Skymap', 'McBrydeSkymap', 'OrthoSkymap', 'MollweideSkymap',
+__all__ = ['Skymap', 'McBrydeSkymap', 'LaeaSkymap', 'MollweideSkymap',
            'HammerSkymap', 'EqualEarthSkymap']
 
 
@@ -79,6 +79,7 @@ class Skymap():
 
         kwargs['lon_0'] = lon_0
         self.projection = get_projection(projection_name, **kwargs)
+        self.projection_name = projection_name
         self._ax = fig.add_subplot(subspec, projection=self.projection)
         self._aa = None
 
@@ -93,7 +94,7 @@ class Skymap():
         if extent is None:
             extent = [lon_0 - 180.0, lon_0 + 180.0, -90.0, 90.0]
 
-        self.set_extent(extent)
+        self._initialize_axes(extent)
 
         # Set up callbacks on axis zoom.
         self._xlc = self._ax.callbacks.connect('xlim_changed', self._change_axis)
@@ -147,8 +148,8 @@ class Skymap():
         proj_xyz = PlateCarree().transform_points(self.projection, x, y)
         return proj_xyz[..., 0], proj_xyz[..., 1]
 
-    def set_extent(self, extent):
-        """Set the extent and create an axis artist.
+    def _initialize_axes(self, extent):
+        """Initialize the axes with a given extent.
 
         Note that calling this method will remove all formatting options.
 
@@ -170,11 +171,38 @@ class Skymap():
         if self.do_gridlines:
             self._aa.grid(True, linestyle=':', color='k', lw=0.5)
 
+        # Draw the outer edges of the projection.  This needs to be forward-
+        # projected and drawn in that space to prevent out-of-bounds clipping.
+        # It also needs to be done just inside -180/180 to prevent the transform
+        # from resolving to the same line.
+        x, y = self.proj(np.linspace(self._lon_0 - 179.9999, self._lon_0 - 179.9999),
+                         np.linspace(-90., 90.))
+        self.plot(x, y, 'k-', transform=self.projection)
+        x, y = self.proj(np.linspace(self._lon_0 + 179.9999, self._lon_0 + 179.9999),
+                         np.linspace(-90., 90.))
+        self.plot(x, y, 'k-', transform=self.projection)
+
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             self._extent = self._ax.get_extent(crs=PlateCarree(central_longitude=self._lon_0))
         self._changed_x_axis = False
         self._changed_y_axis = False
+
+    def set_extent(self, extent):
+        """Set the extent.
+
+        Axes will be properly inverted if Skymap was initialized with
+        ``celestial=True``.
+
+        Parameters
+        ----------
+        extent : array-like
+            Extent as [lon_min, lon_max, lat_min, lat_max].
+        """
+        self._set_axes_limits(extent, invert=self.do_celestial)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self._extent = self._ax.get_extent(crs=PlateCarree(central_longitude=self._lon_0))
 
     def get_extent(self):
         """Get the extent in lon/lat coordinates.
@@ -217,25 +245,6 @@ class Skymap():
             self._ax.set_extent(extent_xform, crs=self.projection)
         else:
             self._ax.set_extent(extent, crs=PlateCarree())
-
-        extreme_finder = ExtremeFinderWrapped(20, 20, self._wrap)
-        extent_xform = self._ax.get_extent()
-        lon_min, lon_max, lat_min, lat_max = extreme_finder(self.proj_inverse,
-                                                            extent_xform[0],
-                                                            extent_xform[2],
-                                                            extent_xform[1],
-                                                            extent_xform[3])
-
-        # Draw the outer edges of the projection.  This needs to be forward-
-        # projected and drawn in that space to prevent out-of-bounds clipping.
-        # It also needs to be done just inside -180/180 to prevent the transform
-        # from resolving to the same line.
-        x, y = self.proj(np.linspace(self._lon_0 - 179.9999, self._lon_0 - 179.9999),
-                         np.linspace(-90., 90.))
-        self.plot(x, y, 'k-', transform=self.projection)
-        x, y = self.proj(np.linspace(self._lon_0 + 179.9999, self._lon_0 + 179.9999),
-                         np.linspace(-90., 90.))
-        self.plot(x, y, 'k-', transform=self.projection)
 
         if self._aa is not None:
             self._aa.set_xlim(self._ax.get_xlim())
@@ -907,12 +916,22 @@ class Skymap():
             Computed healpix map.
         im : `cartopy.mpl.geocollection.GeoQuadMesh`
             Image that was displayed.
+        lon_raster : `np.ndarray`
+            2D array of rasterized longitude values.
+        lat_raster : `np.ndarray`
+            2D array of rasterized latitude values.
+        values_raster : `np.ma.MaskedArray`
+            Masked array of rasterized values.
         """
         hpxmap = healpix_bin(lon, lat, C=C, nside=nside, nest=nest)
 
-        return self.draw_hpxmap(hpxmap, nest=nest, zoom=zoom, xsize=xsize, vmin=vmin,
-                                vmax=vmax, rasterized=rasterized, lon_range=lon_range,
-                                lat_range=lat_range, **kwargs)
+        im, lon_raster, lat_raster, values_raster = self.draw_hpxmap(
+            hpxmap, nest=nest, zoom=zoom, xsize=xsize, vmin=vmin,
+            vmax=vmax, rasterized=rasterized, lon_range=lon_range,
+            lat_range=lat_range,
+            **kwargs)
+
+        return hpxmap, im, lon_raster, lat_raster, values_raster
 
     def draw_inset_colorbar(self, ax=None, format=None, label=None, ticks=None, fontsize=11,
                             width="25%", height="5%", loc=7, bbox_to_anchor=(0., -0.04, 1, 1),
@@ -982,25 +1001,30 @@ class Skymap():
 # and known to work.
 
 class McBrydeSkymap(Skymap):
+    # McBryde-Thomas Flat Polar Quartic
     def __init__(self, **kwargs):
         super().__init__(projection_name='mbtfpq', **kwargs)
 
 
-class OrthoSkymap(Skymap):
+class LaeaSkymap(Skymap):
+    # Lambert Azimuthal Equal Area
     def __init__(self, **kwargs):
-        super().__init__(projection_name='ortho', **kwargs)
+        super().__init__(projection_name='laea', **kwargs)
 
 
 class MollweideSkymap(Skymap):
+    # Mollweide
     def __init__(self, **kwargs):
         super().__init__(projection_name='moll', **kwargs)
 
 
 class HammerSkymap(Skymap):
+    # Hammer-Aitoff
     def __init__(self, **kwargs):
         super().__init__(projection_name='hammer', **kwargs)
 
 
 class EqualEarthSkymap(Skymap):
+    # Equal Earth
     def __init__(self, **kwargs):
         super().__init__(projection_name='eqearth', **kwargs)
