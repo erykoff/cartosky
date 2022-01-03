@@ -358,7 +358,8 @@ class Skymap():
         self._extent = extent
 
         # This synchronizes the axis artist to the plot axes after zoom.
-        self._aa.set_position(self._ax.get_position(), which='original')
+        if self._aa is not None:
+            self._aa.set_position(self._ax.get_position(), which='original')
 
         lon_range = [extent[0], extent[1]]
         lat_range = [extent[2], extent[3]]
@@ -532,12 +533,15 @@ class Skymap():
                                   initial_idx=0, terminus_idx=0))
 
         lonlats = np.array(lonlats)
+        # Ensure that the longitude range is from [-180., 180)
+        lonlats[:, 0] = (lonlats[:, 0] + 180.) % 360. - 180.
 
         # Cut into segments that wrap around ...
-        lon_test = (lonlats[:, 0] + 180.) % 360. - 180.
-        delta = lon_test[: -1] - lon_test[1:]
+        delta = lonlats[: -1, 0] - lonlats[1:, 0]
         cut, = np.where(np.abs(delta) > 180.0)
-        cut = np.append(cut, len(lon_test))
+        # This will use all of the values after the last cut (or all the values
+        # if there are no 180 wraps).
+        cut = np.append(cut, len(lonlats[:, 0]) - 1)
 
         prev_index = 0
         for c in cut:
