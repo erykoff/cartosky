@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Test notebooks in tutorial.
 
@@ -8,23 +7,35 @@ https://blog.thedataincubator.com/2016/06/testing-jupyter-notebooks/
 __author__ = "Alex Drlica-Wagner"
 
 import os
-import unittest
-import glob
-
+import pytest
 import subprocess
 import tempfile
 
 import nbformat
 
 
-def _notebook_run(path):
+ROOT = os.path.abspath(os.path.dirname(__file__))
+
+
+def _notebook_run(nbfile):
     """Execute a notebook via nbconvert and collect output.
-       :returns (parsed nb object, execution errors)
+
+    Parameters
+    ----------
+    nbfile : `str`
+        Notebook file to run.
+
+    Returns
+    -------
+    nb : `???`
+        Parsed notebook object.
+    errors : `list` [`str`]
+        List of error strings.
     """
     with tempfile.NamedTemporaryFile(suffix=".ipynb") as fout:
         args = ["jupyter", "nbconvert", "--to", "notebook", "--execute",
                 "--ExecutePreprocessor.timeout=60", "--log-level=WARN",
-                "--output", fout.name, path]
+                "--output", fout.name, nbfile]
         subprocess.check_call(args)
 
         fout.seek(0)
@@ -37,46 +48,11 @@ def _notebook_run(path):
     return nb, errors
 
 
-class TestTutorial(unittest.TestCase):
-    """ Test the tutorial notebooks. """
-
-    path = './tutorial'
-
-    def _test_notebook(self, path):
-        """ Test a notebook.
-
-        Parameters
-        ----------
-        path : path to notebook
-
-        Returns
-        -------
-        None
-        """
-        nb, errors = _notebook_run(path)
-        assert errors == []
-
-    def _test_tutorial(self, i=1):
-        """ Test a specific tutorial of the tutorial. """
-        path = glob.glob(self.path+'/tutorial%i_*.ipynb'%i)[0]
-        abspath = os.path.abspath(path)
-        self._test_notebook(abspath)
-
-    def test_tutorial1(self):
-        return self._test_tutorial(1)
-
-    def test_tutorial2(self):
-        return self._test_tutorial(2)
-
-    def test_tutorial3(self):
-        return self._test_tutorial(3)
-
-    def test_tutorial4(self):
-        return self._test_tutorial(4)
-
-    def test_tutorial5(self):
-        return self._test_tutorial(5)
-
-
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize("nbfile", ["tutorial_baseclass.ipynb",
+                                    "tutorial_surveys.ipynb",
+                                    "tutorial_healsparse.ipynb"])
+def test_tutorial_notebooks(nbfile):
+    """Test running a tutorial notebook."""
+    fname = os.path.abspath(os.path.join(ROOT, '../tutorial', nbfile))
+    nb, errors = _notebook_run(fname)
+    assert errors == []
