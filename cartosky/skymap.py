@@ -996,6 +996,46 @@ class Skymap():
 
         return cbar, cax
 
+    def draw_milky_way(self, width=10, linewidth=1.5, color='black', linestyle='-', **kwargs):
+        """Draw the Milky Way galaxy.
+
+        Parameters
+        ----------
+        width : `float`
+            Number of degrees north and south to draw dotted lines.
+        linewidth : `float`
+            Width of line along the plane.
+        color : `str`
+            Color of Milky Way plane.
+        linestyle : `str`
+            Style of line.
+        **kwargs : `dict`
+            Additional kwargs to pass to plot.
+        """
+        from astropy import units as u
+        from astropy.coordinates import SkyCoord
+
+        glon = np.linspace(0, 360, 500)
+        glat = np.zeros_like(glon)
+
+        gc = SkyCoord(l=glon*u.degree, b=glat*u.degree, frame='galactic')
+        radec = gc.fk5
+        ra = radec.ra.degree
+        dec = radec.dec.degree
+
+        self.draw_line_lonlat(ra, dec, linewidth=linewidth, color=color, linestyle=linestyle,
+                              nsamp=5, **kwargs)
+        # pop any labels
+        kwargs.pop('label', None)
+        if width > 0:
+            for delta in [+width, -width]:
+                gc = SkyCoord(l=glon*u.degree, b=(glat + delta)*u.degree, frame='galactic')
+                radec = gc.fk5
+                ra = radec.ra.degree
+                dec = radec.dec.degree
+                self.draw_line_lonlat(ra, dec, linewidth=1.0, color=color,
+                                      nsamp=5, linestyle='--', **kwargs)
+
 
 # The following skymaps include the equal-area projections that are tested
 # and known to work.
