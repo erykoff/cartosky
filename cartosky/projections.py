@@ -2,7 +2,6 @@ import warnings
 
 import cartopy.crs
 from cartopy.crs import _WarpedRectangularProjection, Globe
-from .utils import setdefaults
 
 # Default radius of the Globe.
 # Eventually should be possible to use the unit sphere.
@@ -17,10 +16,13 @@ class SkySphere(Globe):
     Spherical ccrs.Globe for sky plotting.
     """
 
-    def __init__(self, *args, **kwargs):
-        defaults = dict(ellipse=None, semimajor_axis=RADIUS, semiminor_axis=RADIUS)
-        kwargs = setdefaults(kwargs, defaults)
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, ellipse=None, semimajor_axis=RADIUS, semiminor_axis=RADIUS,
+                 **kwargs):
+        super().__init__(*args,
+                         ellipse=ellipse,
+                         semimajor_axis=semimajor_axis,
+                         semiminor_axis=semiminor_axis,
+                         **kwargs)
 
 
 class Aitoff(_WarpedRectangularProjection):
@@ -209,15 +211,17 @@ _projections = {
 }
 
 
-def get_projection(name, **kwargs):
+def get_projection(name, globe=SkySphere(), **kwargs):
     """Return a cartosky projection.
 
     For list of projections available, use cartosky.get_available_projections().
 
     Parameters
     ----------
-    name : str
+    name : `str`
         Cartosky name of projection.
+    globe : `cartopy.crs.Globe`, optional
+        Globe to use for projections.
     **kwargs :
         Additional kwargs appropriate for given projection.
 
@@ -234,9 +238,6 @@ def get_projection(name, **kwargs):
         'lat_max': 'max_latitude',
     }
     kwproj = {aliases.get(key, key): value for key, value in kwargs.items()}
-    # Set the default globe
-    kwproj = setdefaults(kwproj,
-                         {'globe': SkySphere()})
 
     # Is this a listed projection?
     if name not in _projections:
@@ -253,7 +254,7 @@ def get_projection(name, **kwargs):
         # This is a cartosky projection direct from proj.
         crs = projtype
 
-    return crs(**kwproj)
+    return crs(globe=globe, **kwproj)
 
 
 def get_available_projections():
