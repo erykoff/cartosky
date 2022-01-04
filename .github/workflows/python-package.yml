@@ -33,20 +33,17 @@ jobs:
     - name: Install dependencies
       run: |
         export PATH="$CONDA/bin:$PATH"
-        conda create -q -n env python=${{ matrix.python-version }} pandas astropy cartopy healpy ephem healsparse -c conda-forge
+        conda create -q -n env python=${{ matrix.python-version }} numpy scipy matplotlib cartopy>=0.20.0 healpy setuptools_scm setuptools_scm_git_archive healsparse ephoem pyproj>=3.1.0 pytest jupyter nbconvert flake8 -c conda-forge
         source activate env
-        pip install .
+        pip install --no-deps .
     - name: Lint with flake8
       run: |
         export PATH="$CONDA/bin:$PATH"
         source activate env
-        conda install flake8 -c conda-forge
         # Run flake8 with settings from setup.cfg
         flake8
     - name: Test with pytest
       run: |
         export PATH="$CONDA/bin:$PATH"
-        export MPLBACKEND=Agg
         source activate env
-        conda install jupyter nbconvert -c conda-forge
         pytest
