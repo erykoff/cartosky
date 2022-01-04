@@ -507,6 +507,10 @@ class Skymap():
         # DOES THIS EVEN WORK?  UNTESTED.
         return self._ax.hexbin(*args, transform=transform, **kwargs)
 
+    def fill(self, *args, transform=PlateCarree(), **kwargs):
+        """Plot with ax.fill(*args, **kwargs)."""
+        return self._ax.fill(*args, transform=transform, **kwargs)
+
     def legend(self, *args, loc='upper left', **kwargs):
         """Add legend to the axis with ax.legend(*args, **kwargs)."""
         return self._ax.legend(*args, loc='upper left', **kwargs)
@@ -528,40 +532,17 @@ class Skymap():
             Line style for segments.
         nsamp : `int`, optional
             Number of samples for each line segment.
-        label : `str`, optional
-            Legend label string.
         **kwargs : `dict`
             Additional keywords passed to plot.
         """
-        _lon = np.atleast_1d(lon)
-        _lat = np.atleast_1d(lat)
-        g = Geod(a=RADIUS)
-        lonlats = []
-        for i in range(len(_lon) - 1):
-            lonlats.extend(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
-                                  initial_idx=0, terminus_idx=0))
-
-        lonlats = np.array(lonlats)
-        # Ensure that the longitude range is from [-180., 180)
-        lonlats[:, 0] = (lonlats[:, 0] + 180.) % 360. - 180.
-
-        # Cut into segments that wrap around ...
-        delta = lonlats[: -1, 0] - lonlats[1:, 0]
-        cut, = np.where(np.abs(delta) > 180.0)
-        # This will use all of the values after the last cut (or all the values
-        # if there are no 180 wraps).
-        cut = np.append(cut, len(lonlats[:, 0]) - 1)
-
-        prev_index = 0
-        for c in cut:
-            self.plot(lonlats[prev_index: c + 1, 0], lonlats[prev_index: c + 1, 1],
-                      color=color, linestyle=linestyle, **kwargs)
-            prev_index = c + 1
+        segments = self._interpolate_geodesic_segments(lon, lat, nsamp=nsamp)
+        for s in segments:
+            self.plot(s[0], s[1], color=color, linestyle=linestyle, **kwargs)
             # Only add label to first line segment.
             kwargs.pop('label', None)
 
-    def draw_polygon_lonlat(self, lon, lat, color='red', linestyle='solid',
-                            **kwargs):
+    def draw_polygon_lonlat(self, lon, lat, edgecolor='red', linestyle='solid',
+                            facecolor=None, **kwargs):
         """Plot a polygon from a list of lon, lat coordinates.
 
         Parameters
@@ -570,12 +551,12 @@ class Skymap():
             Array of longitude points in polygon.
         lat : `np.ndarray`
             Array of latitude points in polygon.
-        color : `str`, optional
-            Color of polygon boundary.
+        edgecolor : `str`, optional
+            Color of polygon boundary.  Set to None for no boundary.
         linestyle : `str`, optional
             Line style for boundary.
-        label : `str`, optional
-            Legend label string.
+        facecolor : `str`, optional
+            Color of polygon face.  Set to None for no fill color.
         **kwargs : `dict`, optional
             Additional keywords passed to plot.
         """
@@ -585,10 +566,23 @@ class Skymap():
         lon = np.append(lon, lon[0])
         lat = np.append(lat, lat[0])
 
-        self.draw_line_lonlat(lon, lat, color=color, linestyle=linestyle, **kwargs)
+        # Find the segments
+        nsamp = kwargs.get('nsamp', 100)
+        segments = self._interpolate_geodesic_segments(lon, lat, nsamp=nsamp, permute=True)
+
+        for s in segments:
+            if facecolor is not None:
+                # We need to ensure these segments are closed.
+                self.fill(np.append(s[0], s[0][0]),
+                          np.append(s[1], s[1][0]),
+                          facecolor)
+            if linestyle is not None:
+                self.plot(s[0], s[1], color=edgecolor, linestyle=linestyle, **kwargs)
+            # Only add label to first segment.
+            kwargs.pop('label', None)
 
     def draw_polygon_file(self, filename, reverse=True,
-                          color='red', linestyle='solid', **kwargs):
+                          edgecolor='red', linestyle='solid', **kwargs):
         """Draw a text file containing lon, lat coordinates of polygon(s).
 
         Parameters
@@ -597,7 +591,7 @@ class Skymap():
             Name of file containing the polygon(s) [lon, lat, poly]
         reverse : `bool`
             Reverse drawing order of points in each polygon.
-        color : `str`
+        edgecolor : `str`
             Color of polygon boundary.
         linestyle : `str`, optional
             Line style for boundary.
@@ -617,11 +611,66 @@ class Skymap():
             lat = poly['lat'][::-1] if reverse else poly['lat']
             self.draw_polygon_lonlat(lon,
                                      lat,
-                                     color=color,
+                                     edgecolor=edgecolor,
                                      linestyle=linestyle,
                                      **kwargs)
             # Only add the label to the first polygon plotting.
             kwargs.pop('label', None)
+
+    def _interpolate_geodesic_segments(self, lon, lat, nsamp=100, permute=False):
+        """Interpolate lon/lat points into geodesic segments.
+
+        Parameters
+        ----------
+        lon : `np.ndarray`
+            Array of longitude vertices in the segments.
+        lat : `np.ndarray`
+            Array of latitude vertices in the segments.
+        nsamp : `int`, optional
+            Number of geodesic samples for each segment.
+        permute : `bool`, optional
+            Permute points so we start at a clip (used for closed polygons).
+
+        Returns
+        -------
+        segments : `list`
+            List of lon/lat segments, each clipped so it does
+            not cross +/-180 degrees in longitude.
+        """
+        _lon = np.atleast_1d(lon)
+        _lat = np.atleast_1d(lat)
+        g = Geod(a=RADIUS)
+        lonlats = []
+        for i in range(len(_lon) - 1):
+            lonlats.extend(g.npts(_lon[i], _lat[i], _lon[i + 1], _lat[i + 1], nsamp,
+                                  initial_idx=0, terminus_idx=0))
+
+        lonlats = np.array(lonlats)
+        # Ensure that the longitude range is from [-180., 180)
+        lonlats[:, 0] = (lonlats[:, 0] + 180.) % 360. - 180.
+
+        # Cut into segments that wrap around ...
+        delta = lonlats[: -1, 0] - lonlats[1:, 0]
+        cut, = np.where(np.abs(delta) > 180.0)
+
+        if permute and cut.size > 0:
+            # Roll around to start at one of the wrapping intersections.
+            # This ensures that the polygon is properly filled at the edges.
+            lonlats = np.roll(lonlats, -cut[0], axis=0)
+            delta = lonlats[: -1, 0] - lonlats[1:, 0]
+            cut, = np.where(np.abs(delta) > 180.0)
+
+        # This will use all of the values after the last cut (or all the values
+        # if there are no 180 wraps).
+        cut = np.append(cut, len(lonlats[:, 0]) - 1)
+
+        prev_index = 0
+        segments = []
+        for c in cut:
+            segments.append((lonlats[prev_index: c + 1, 0], lonlats[prev_index: c + 1, 1]))
+            prev_index = c + 1
+
+        return segments
 
     def draw_hpxmap(self, hpxmap, nest=False, zoom=True, xsize=1000, vmin=None, vmax=None,
                     rasterized=True, lon_range=None, lat_range=None, **kwargs):

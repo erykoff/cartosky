@@ -12,25 +12,25 @@ class SurveySkymap(Skymap):
         """Draw the DES footprint."""
         return self.draw_des17(**kwargs)
 
-    def draw_des17(self, color='red', lw=2, **kwargs):
+    def draw_des17(self, edgecolor='red', lw=2, **kwargs):
         """Draw the DES 2017 footprint."""
         filename = get_datafile('des-round17-poly.txt')
-        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
+        return self.draw_polygon_file(filename, edgecolor=edgecolor, lw=lw, **kwargs)
 
-    def draw_decals(self, color='red', lw=2, **kwargs):
+    def draw_decals(self, edgecolor='red', lw=2, **kwargs):
         """Draw the DECaLS footprint."""
         filename = get_datafile('decals-poly.txt')
-        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
+        return self.draw_polygon_file(filename, edgecolor=edgecolor, lw=lw, **kwargs)
 
-    def draw_maglites(self, color='blue', lw=2, **kwargs):
+    def draw_maglites(self, edgecolor='blue', lw=2, **kwargs):
         """Draw the MagLiteS footprint."""
         filename = get_datafile('maglites-poly.txt')
-        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
+        return self.draw_polygon_file(filename, edgecolor=edgecolor, lw=lw, **kwargs)
 
-    def draw_bliss(self, color='magenta', lw=2, **kwargs):
+    def draw_bliss(self, edgecolor='magenta', lw=2, **kwargs):
         """Draw the BLISS footprint."""
         filename = get_datafile('bliss-poly.txt')
-        return self.draw_polygon_file(filename, color=color, lw=lw, **kwargs)
+        return self.draw_polygon_file(filename, edgecolor=edgecolor, lw=lw, **kwargs)
 
     # Override zoom default for survey maps to keep the default fixed.
     def draw_hpxmap(self, hpxmap, nest=False, zoom=False, xsize=1000, vmin=None, vmax=None,
