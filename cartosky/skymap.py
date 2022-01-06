@@ -49,6 +49,7 @@ class Skymap():
         # self.set_date(kwargs.pop('date', None))
         self._redraw_dict = {'hpxmap': None,
                              'hspmap': None,
+                             'im': None,
                              'vmin': None,
                              'vmax': None,
                              'xsize': None,
@@ -388,10 +389,15 @@ class Skymap():
             # Nothing to do
             return
 
+        if self._redraw_dict['im'] is not None:
+            self._redraw_dict['im'].remove()
+            self._redraw_dict['im'] = None
+
         im = self.pcolormesh(lon_raster, lat_raster, values_raster,
                              vmin=self._redraw_dict['vmin'],
                              vmax=self._redraw_dict['vmax'],
                              **self._redraw_dict['kwargs_pcolormesh'])
+        self._redraw_dict['im'] = im
         self._ax._sci(im)
 
     def set_xlabel(self, text, side='bottom', **kwargs):
@@ -749,6 +755,7 @@ class Skymap():
         # Link up callbacks
         self._redraw_dict['hspmap'] = None
         self._redraw_dict['hpxmap'] = hpxmap
+        self._redraw_dict['im'] = im
         self._redraw_dict['nside'] = nside
         self._redraw_dict['nest'] = nest
         self._redraw_dict['vmin'] = vmin
@@ -914,6 +921,7 @@ class Skymap():
         # Link up callbacks
         self._redraw_dict['hspmap'] = hspmap
         self._redraw_dict['hpxmap'] = None
+        self._redraw_dict['im'] = im
         self._redraw_dict['vmin'] = vmin
         self._redraw_dict['vmax'] = vmax
         self._redraw_dict['xsize'] = xsize
